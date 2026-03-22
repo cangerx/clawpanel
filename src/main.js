@@ -4,7 +4,7 @@
 import { registerRoute, initRouter, navigate, setDefaultRoute } from './router.js'
 import { renderSidebar, openMobileSidebar } from './components/sidebar.js'
 import { initTheme } from './lib/theme.js'
-import { detectOpenclawStatus, isOpenclawReady, isUpgrading, isGatewayRunning, onGatewayChange, startGatewayPoll, onGuardianGiveUp, resetAutoRestart, loadActiveInstance, getActiveInstance, onInstanceChange } from './lib/app-state.js'
+import { detectOpenclawStatus, isOpenclawReady, isOpenclawActuallyReady, isUpgrading, isGatewayRunning, onGatewayChange, startGatewayPoll, onGuardianGiveUp, resetAutoRestart, loadActiveInstance, getActiveInstance, onInstanceChange, isSetupSkipped, clearSetupSkipped } from './lib/app-state.js'
 import { wsClient } from './lib/ws-client.js'
 import { api, checkBackendHealth, isBackendOnline, onBackendStatusChange } from './lib/tauri-api.js'
 import { version as APP_VERSION } from '../package.json'
@@ -88,7 +88,7 @@ function showBackendDownOverlay() {
       </button>
       <div id="backend-retry-status" style="font-size:12px;color:var(--text-tertiary);margin-top:12px"></div>
       <div style="margin-top:16px;font-size:11px;color:#aaa">
-        <a href="https://claw.qt.cool" target="_blank" rel="noopener" style="color:#aaa;text-decoration:none">claw.qt.cool</a>
+        <a href="https://api.772.ee/" target="_blank" rel="noopener" style="color:#aaa;text-decoration:none">api.772.ee</a>
         <span style="margin:0 6px">&middot;</span>v${APP_VERSION}
       </div>
     </div>
@@ -177,7 +177,7 @@ function showLoginOverlay(defaultPw) {
         </div>
       </details>` : ''}
       <div style="margin-top:${hasDefault ? '20' : '12'}px;font-size:11px;color:#aaa;text-align:center">
-        <a href="https://claw.qt.cool" target="_blank" rel="noopener" style="color:#aaa;text-decoration:none">claw.qt.cool</a>
+        <a href="https://api.772.ee/" target="_blank" rel="noopener" style="color:#aaa;text-decoration:none">api.772.ee</a>
         <span style="margin:0 6px">·</span>v${APP_VERSION}
       </div>
     </div>
@@ -361,6 +361,12 @@ async function boot() {
   ensureWebSession.then(() => loadActiveInstance()).then(() => detectOpenclawStatus()).then(() => {
     // 重新渲染侧边栏（检测完成后 isOpenclawReady 状态已更新）
     renderSidebar(sidebar)
+
+    // 如果实际就绪且之前跳过过，清除跳过标记
+    if (isSetupSkipped() && isOpenclawActuallyReady()) {
+      clearSetupSkipped()
+    }
+
     if (!isOpenclawReady()) {
       setDefaultRoute('/setup')
       navigate('/setup')

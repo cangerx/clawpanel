@@ -13,7 +13,7 @@ export const API_TYPES = [
 
 // 服务商快捷预设
 export const PROVIDER_PRESETS = [
-  { key: 'qtcool', label: '晴辰云', badge: '推荐', baseUrl: 'https://gpt.qt.cool/v1', api: 'openai-completions', site: 'https://gpt.qt.cool/', desc: '面板用户免费使用部分模型，付费用户享全系列顶级模型支持，全部模型低至 2-3 折' },
+  { key: 'cangerapi', label: '苍洱API', badge: '推荐', baseUrl: 'https://api.772.ee/v1', api: 'openai-completions', site: 'https://api.772.ee/', desc: 'AI 模型 API 中转平台，支持 OpenAI 和 Anthropic 全系列模型' },
   { key: 'shengsuanyun', label: '胜算云', baseUrl: 'https://router.shengsuanyun.com/api/v1', api: 'openai-completions', site: 'https://www.shengsuanyun.com/?from=CH_4BVI0BM2', desc: '国内知名 AI 模型聚合平台，支持多种主流模型' },
   { key: 'siliconflow', label: '硅基流动', baseUrl: 'https://api.siliconflow.cn/v1', api: 'openai-completions', site: 'https://cloud.siliconflow.cn/i/PFrw2an5', desc: '高性价比推理平台，支持 DeepSeek、Qwen 等开源模型' },
   { key: 'volcengine', label: '火山引擎', baseUrl: 'https://ark.cn-beijing.volces.com/api/v3', api: 'openai-completions', site: 'https://volcengine.com/L/Ph1OP5I3_GY', desc: '字节跳动旗下云平台，支持豆包等模型' },
@@ -28,18 +28,19 @@ export const PROVIDER_PRESETS = [
   { key: 'ollama', label: 'Ollama (本地)', baseUrl: 'http://127.0.0.1:11434/v1', api: 'openai-completions' },
 ]
 
-// 晴辰云配置
-export const QTCOOL = {
-  baseUrl: 'https://gpt.qt.cool/v1',
-  defaultKey: 'sk-0JDu7hyc51ZKD4iNebpFu07EUEhXmVVc',
-  site: 'https://gpt.qt.cool/',
-  checkinUrl: 'https://gpt.qt.cool/checkin',
-  usageUrl: 'https://gpt.qt.cool/user?key=',
-  providerKey: 'qtcool',
-  brandName: '晴辰云',
+// 苍洱API 配置
+export const CANGERAPI = {
+  baseUrl: 'https://api.772.ee/v1',
+  defaultKey: '',  // no built-in key, users register to get one
+  site: 'https://api.772.ee/',
+  checkinUrl: 'https://api.772.ee/',
+  usageUrl: 'https://api.772.ee/',
+  providerKey: 'cangerapi',
+  brandName: '苍洱API',
   api: 'openai-completions',
-  models: []  // 始终从 API 动态获取最新模型列表
+  models: []
 }
+export const QTCOOL = CANGERAPI
 
 // 胜算云推广配置
 export const SHENGSUANYUN = {
@@ -77,15 +78,15 @@ export const MODEL_PRESETS = {
 }
 
 /**
- * 动态获取 QTCOOL 模型列表
- * @param {string} [apiKey] - 自定义密钥，不传则用默认密钥
+ * 动态获取苍洱API模型列表
+ * @param {string} [apiKey] - API 密钥，未传则返回空列表
  * @returns {Promise<Array<{id:string, name:string, contextWindow:number, reasoning?:boolean}>>}
  */
-export async function fetchQtcoolModels(apiKey) {
-  const key = apiKey || QTCOOL.defaultKey
+export async function fetchCangerModels(apiKey) {
+  if (!apiKey) return CANGERAPI.models
   try {
-    const resp = await fetch(QTCOOL.baseUrl + '/models', {
-      headers: { 'Authorization': 'Bearer ' + key },
+    const resp = await fetch(CANGERAPI.baseUrl + '/models', {
+      headers: { 'Authorization': 'Bearer ' + apiKey },
       signal: AbortSignal.timeout(8000)
     })
     if (resp.ok) {
@@ -98,5 +99,6 @@ export async function fetchQtcoolModels(apiKey) {
       }
     }
   } catch { /* use fallback */ }
-  return QTCOOL.models
+  return CANGERAPI.models
 }
+export const fetchQtcoolModels = fetchCangerModels

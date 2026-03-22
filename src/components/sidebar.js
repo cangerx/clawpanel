@@ -13,7 +13,7 @@ const NAV_ITEMS_FULL = [
     section: '概览',
     items: [
       { route: '/dashboard', label: '仪表盘', icon: 'dashboard' },
-      { route: '/assistant', label: '晴辰助手', icon: 'assistant' },
+      { route: '/assistant', label: 'AI 助手', icon: 'assistant' },
       { route: '/chat', label: '实时聊天', icon: 'chat' },
       { route: '/services', label: '服务管理', icon: 'services' },
       { route: '/logs', label: '日志查看', icon: 'logs' },
@@ -59,7 +59,7 @@ const NAV_ITEMS_SETUP = [
     section: '',
     items: [
       { route: '/setup', label: '初始设置', icon: 'setup' },
-      { route: '/assistant', label: '晴辰助手', icon: 'assistant' },
+      { route: '/assistant', label: 'AI 助手', icon: 'assistant' },
     ]
   },
   {
@@ -182,7 +182,7 @@ export function renderSidebar(el) {
         <span>${isDark ? '日间模式' : '夜间模式'}</span>
       </div>
       <div class="sidebar-meta">
-        <a href="https://claw.qt.cool" target="_blank" rel="noopener" class="sidebar-link">claw.qt.cool</a>
+        <a href="https://api.772.ee/" target="_blank" rel="noopener" class="sidebar-link">api.772.ee</a>
         <span class="sidebar-version">v${APP_VERSION}</span>
       </div>
     </div>

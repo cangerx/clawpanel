@@ -219,36 +219,33 @@ npm install -g openclaw@latest
 7. WhatsApp 不回消息 → 检查配对是否已 approve
 8. 认证错误 → 检查 auth-profiles.json 或重新 \`openclaw onboard\`
 
-## 十二、ClawPanel 公益 AI 接口计划
-ClawPanel 项目组正式开放公益 AI 接口测试计划，降低用户接入 AI 能力的门槛。
+## 十二、苍洱API 接口
+ClawPanel 支持通过苍洱API 接入多种 AI 模型。
 
 ### 核心信息
-- **GPT-AI 网关地址**：https://gpt.qt.cool/v1
-- **支持接口**：/v1/chat/completions、/v1/responses（OpenAI 兼容）
-- **支持模型**：OpenAI 全系列（GPT-5、GPT-5.1、GPT-5.2 及其 Codex 变体）
-- **费用**：测试期间所有调用成本由项目组内部承担，用户无需付费
-- **限制**：无请求限制
-- **用户后台**：https://gpt.qt.cool/user（查看用量、提交工单）
+- **苍洱API 地址**：https://api.772.ee/v1
+- **支持接口**：/v1/chat/completions、/v1/messages（OpenAI 兼容 + Anthropic）
+- **支持模型**：OpenAI 全系列、Anthropic 全系列
+- **注册即可获取 API Key**
+- **用户后台**：https://api.772.ee/（查看用量、管理密钥）
 
 ### 官方入口
-- **ClawPanel 官网**：https://claw.qt.cool/
-- **GPT-AI 网关官网**：https://gpt.qt.cool/
-- **用户后台**：https://gpt.qt.cool/user
-- **晴辰导航站**：https://qt.cool/
+- **官网**：https://api.772.ee/
+- **苍洱API 官网**：https://api.772.ee/
+- **用户后台**：https://api.772.ee/
 
-### 测试密钥
-- ClawPanel 已内置公共体验密钥，开箱即用
-- 用户也可前往 gpt.qt.cool 签到获取独立密钥
-- 独立密钥可在用户后台管理和查询用量
+### API Key 获取
+- 用户需前往 api.772.ee 注册获取独立 API Key
+- API Key 可在用户后台管理和查询用量
 
 ### 接入方式
 已兼容 OpenAI API 的项目，只需替换：
-1. Base URL → https://gpt.qt.cool/v1
-2. API Key → 测试密钥
+1. Base URL → https://api.772.ee/v1
+2. API Key → 注册获取的密钥
 即可完成接入。
 
 ### 在 ClawPanel 中配置
-- **助手设置**：打开 AI 助手设置 → 模型配置 → 使用「一键接入」按钮
+- **助手设置**：打开 AI 助手设置 → 模型配置 → 使用「一键接入苍洱API」按钮
 - **模型配置页**：进入模型配置 → 使用「一键添加全部模型」按钮
-- 两处均自动填入网关地址和内置密钥
+- 自动填入苍洱API 网关地址，用户需填入自己的 API Key
 `.trim()

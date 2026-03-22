@@ -3,7 +3,7 @@
  */
 import { api } from '../lib/tauri-api.js'
 import { toast } from '../components/toast.js'
-import { onGatewayChange } from '../lib/app-state.js'
+import { onGatewayChange, isSetupSkipped, clearSetupSkipped, isOpenclawActuallyReady } from '../lib/app-state.js'
 import { navigate } from '../router.js'
 
 let _unsubGw = null
@@ -13,6 +13,14 @@ export async function render() {
   page.className = 'page'
 
   page.innerHTML = `
+    ${isSetupSkipped() ? `
+    <div class="setup-incomplete-banner" id="setup-incomplete-banner">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      <span>OpenClaw 尚未安装配置，部分功能不可用。</span>
+      <a class="btn btn-sm" id="btn-goto-setup-banner" style="color:inherit;text-decoration:underline;font-weight:600">前往设置</a>
+      <button class="setup-incomplete-banner-close" id="btn-dismiss-setup-banner" title="关闭">&times;</button>
+    </div>
+    ` : ''}
     <div class="page-header">
       <h1 class="page-title">仪表盘</h1>
       <p class="page-desc">OpenClaw 运行状态概览</p>
@@ -28,6 +36,7 @@ export async function render() {
     <div id="dashboard-overview-container"></div>
     <div class="quick-actions">
       <button class="btn btn-secondary" id="btn-restart-gw">重启 Gateway</button>
+      <button class="btn btn-secondary" id="btn-diagnose-gw">诊断修复</button>
       <button class="btn btn-secondary" id="btn-check-update">检查更新</button>
       <button class="btn btn-secondary" id="btn-create-backup">创建备份</button>
     </div>
@@ -39,6 +48,12 @@ export async function render() {
 
   // 绑定事件（只绑一次）
   bindActions(page)
+
+  // Setup incomplete banner events
+  page.querySelector('#btn-goto-setup-banner')?.addEventListener('click', () => navigate('/setup'))
+  page.querySelector('#btn-dismiss-setup-banner')?.addEventListener('click', () => {
+    page.querySelector('#setup-incomplete-banner')?.remove()
+  })
 
   // 异步加载数据
   loadDashboardData(page).catch(e => {
@@ -137,6 +152,14 @@ async function loadDashboardData(page, fullRefresh = false) {
   renderLogs(page, logs)
 
   _dashboardInitialized = true
+
+  // If setup was skipped but now actually ready, clear skip flag and hide banner
+  // Only check raw state, don't re-trigger detectOpenclawStatus (avoids sidebar flash)
+  if (isSetupSkipped() && isOpenclawActuallyReady()) {
+    clearSetupSkipped()
+    const banner = page.querySelector('#setup-incomplete-banner')
+    if (banner) banner.remove()
+  }
 }
 
 function renderStatCards(page, services, version, agents, config) {
@@ -237,7 +260,7 @@ function renderOverview(page, services, mcpConfig, backups, config, agents, stat
           <div class="overview-card-actions">
             ${gw?.running
               ? '<button class="btn btn-danger btn-xs" data-action="stop-gw">停止</button><button class="btn btn-secondary btn-xs" data-action="restart-gw">重启</button>'
-              : '<button class="btn btn-primary btn-xs" data-action="start-gw">启动</button>'
+              : '<button class="btn btn-primary btn-xs" data-action="start-gw">启动</button><button class="btn btn-secondary btn-xs" data-action="diagnose-gw">诊断</button>'
             }
           </div>
         </div>
@@ -355,6 +378,7 @@ function renderLogs(page, logs) {
 
 function bindActions(page) {
   const btnRestart = page.querySelector('#btn-restart-gw')
+  const btnDiagnose = page.querySelector('#btn-diagnose-gw')
   const btnUpdate = page.querySelector('#btn-check-update')
   const btnCreateBackup = page.querySelector('#btn-create-backup')
 
@@ -398,11 +422,41 @@ function bindActions(page) {
     if (action === 'start-gw') {
       actionBtn.disabled = true; actionBtn.textContent = '启动中...'
       try {
-        await api.startService('ai.openclaw.gateway')
-        toast('Gateway 启动指令已发送', 'success')
-        setTimeout(() => loadDashboardData(page), 2000)
-      } catch (err) { toast('启动失败: ' + err, 'error') }
+        const result = await api.startService('ai.openclaw.gateway')
+        if (result === true) {
+          toast('Gateway 已启动', 'success')
+          setTimeout(() => loadDashboardData(page), 2000)
+        } else if (result && result.started === false) {
+          toast(result.hint || '启动失败', 'warning')
+          // 自动触发诊断
+          showDiagnosticPanel(page)
+        } else {
+          toast('Gateway 启动指令已发送', 'success')
+          setTimeout(() => loadDashboardData(page), 2000)
+        }
+      } catch (err) {
+        toast('启动失败: ' + err, 'error')
+        showDiagnosticPanel(page)
+      }
       finally { actionBtn.disabled = false; actionBtn.textContent = '启动' }
+    }
+    if (action === 'diagnose-gw') {
+      showDiagnosticPanel(page)
+    }
+    if (action === 'fix-gw') {
+      actionBtn.disabled = true; actionBtn.textContent = '修复中...'
+      try {
+        const result = await api.fixGateway()
+        if (result.success) {
+          toast('Gateway 修复成功，已重新启动', 'success')
+          removeDiagnosticPanel(page)
+          setTimeout(() => loadDashboardData(page), 1500)
+        } else {
+          toast('修复已执行但 Gateway 仍未启动', 'warning')
+          showDiagnosticPanel(page)
+        }
+      } catch (err) { toast('修复失败: ' + err, 'error') }
+      finally { actionBtn.disabled = false; actionBtn.textContent = '一键修复' }
     }
     if (action === 'stop-gw') {
       actionBtn.disabled = true; actionBtn.textContent = '停止中...'
@@ -463,6 +517,8 @@ function bindActions(page) {
     loadDashboardData(page)
   })
 
+  btnDiagnose?.addEventListener('click', () => showDiagnosticPanel(page))
+
   btnUpdate?.addEventListener('click', async () => {
     btnUpdate.disabled = true
     btnUpdate.textContent = '检查中...'
@@ -499,6 +555,63 @@ function bindActions(page) {
       btnCreateBackup.textContent = '创建备份'
     }
   })
+}
+
+function removeDiagnosticPanel(page) {
+  page.querySelector('.gw-diag-panel')?.remove()
+}
+
+async function showDiagnosticPanel(page) {
+  removeDiagnosticPanel(page)
+  const container = page.querySelector('#dashboard-overview-container')
+  if (!container) return
+
+  // 插入加载占位
+  const panel = document.createElement('div')
+  panel.className = 'gw-diag-panel'
+  panel.innerHTML = '<div class="gw-diag-title"><span class="service-spinner"></span> 正在诊断...</div>'
+  // 插入到 overview grid 后面
+  const overviewEl = container.querySelector('.dashboard-overview')
+  if (overviewEl) overviewEl.after(panel)
+  else container.appendChild(panel)
+
+  try {
+    const diag = await api.diagnoseGateway()
+    const items = (diag.checks || []).map(c => {
+      const cls = c.ok ? 'gw-diag-ok' : 'gw-diag-fail'
+      const icon = c.ok ? '✓' : '✗'
+      const isErrLog = c.id === 'errlog' && !c.ok
+      return `<div class="gw-diag-item ${cls}">
+        <span class="gw-diag-icon">${icon}</span>
+        <span class="gw-diag-label">${escapeHtml(c.label)}</span>
+        ${isErrLog
+          ? `<span class="gw-diag-detail errlog">${escapeHtml(c.detail)}</span>`
+          : `<span class="gw-diag-detail" title="${escapeHtml(c.detail)}">${escapeHtml(c.detail)}</span>`
+        }
+      </div>`
+    }).join('')
+
+    panel.innerHTML = `
+      <div class="gw-diag-title">诊断结果 · 端口 ${diag.port || '?'}</div>
+      <div class="gw-diag-list">${items}</div>
+      <div class="gw-diag-actions">
+        ${diag.fixable ? '<button class="btn btn-primary btn-sm" data-action="fix-gw">一键修复</button>' : ''}
+        <button class="btn btn-secondary btn-sm" data-action="diagnose-gw">重新诊断</button>
+        <button class="btn btn-ghost btn-sm gw-diag-close">关闭</button>
+      </div>
+    `
+    panel.querySelector('.gw-diag-close')?.addEventListener('click', () => panel.remove())
+  } catch (err) {
+    panel.innerHTML = `
+      <div class="gw-diag-title" style="color:var(--error)">诊断失败</div>
+      <div style="font-size:var(--font-size-sm);color:var(--text-secondary);margin-bottom:var(--space-sm)">${escapeHtml(String(err?.message || err))}</div>
+      <div class="gw-diag-actions">
+        <button class="btn btn-secondary btn-sm" data-action="diagnose-gw">重试</button>
+        <button class="btn btn-ghost btn-sm gw-diag-close">关闭</button>
+      </div>
+    `
+    panel.querySelector('.gw-diag-close')?.addEventListener('click', () => panel.remove())
+  }
 }
 
 function escapeHtml(str) {

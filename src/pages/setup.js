@@ -5,36 +5,49 @@
 import { api, invalidate } from '../lib/tauri-api.js'
 import { showUpgradeModal } from '../components/modal.js'
 import { toast } from '../components/toast.js'
-import { setUpgrading, isMacPlatform } from '../lib/app-state.js'
+import { setUpgrading, isMacPlatform, skipSetup } from '../lib/app-state.js'
 import { diagnoseInstallError } from '../lib/error-diagnosis.js'
 import { icon, statusIcon } from '../lib/icons.js'
+import { showContentModal } from '../components/modal.js'
+import { navigate } from '../router.js'
 
 export async function render() {
   const page = document.createElement('div')
   page.className = 'page'
 
   page.innerHTML = `
-    <div style="max-width:560px;margin:48px auto;text-align:center">
-      <div style="margin-bottom:var(--space-lg)">
-        <img src="/images/logo-brand.png" alt="ClawPanel" style="max-width:160px;width:100%;height:auto">
+    <div class="setup-container">
+      <div class="setup-header">
+        <img src="/images/logo-brand.png" alt="ClawPanel" class="setup-logo">
+        <h1 class="setup-title">欢迎使用 ClawPanel</h1>
+        <p class="setup-subtitle">OpenClaw AI Agent 框架的桌面管理面板</p>
       </div>
-      <h1 style="font-size:var(--font-size-xl);margin-bottom:var(--space-xs)">欢迎使用 ClawPanel</h1>
-      <p style="color:var(--text-secondary);margin-bottom:var(--space-xl);line-height:1.6">
-        OpenClaw AI Agent 框架的桌面管理面板
-      </p>
+
+      <div id="setup-progress-bar" class="setup-progress-bar">
+        <div class="setup-progress-fill" id="setup-progress-fill"></div>
+      </div>
 
       <div id="setup-steps"></div>
 
-      <div style="margin-top:var(--space-lg)">
-        <button class="btn btn-secondary btn-sm" id="btn-recheck" style="min-width:120px">
+      <div class="setup-actions">
+        <button class="btn btn-secondary btn-sm" id="btn-recheck">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14" style="margin-right:4px"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
           重新检测
+        </button>
+        <button class="btn btn-ghost btn-sm" id="btn-skip-setup">
+          跳过设置，稍后配置
         </button>
       </div>
     </div>
   `
 
   page.querySelector('#btn-recheck').addEventListener('click', () => runDetect(page))
+  page.querySelector('#btn-skip-setup').addEventListener('click', () => {
+    skipSetup()
+    navigate('/dashboard')
+    // 延迟弹出引导弹窗
+    setTimeout(() => showSetupGuideModal(), 300)
+  })
   runDetect(page)
   return page
 }
@@ -87,8 +100,8 @@ async function runDetect(page) {
 }
 
 function stepIcon(ok) {
-  const color = ok ? 'var(--success)' : 'var(--text-tertiary)'
-  return `<span style="color:${color};font-weight:700;width:18px;display:inline-block">${ok ? '✓' : '✗'}</span>`
+  if (ok) return `<span class="setup-status-badge setup-status-ok">✓ 就绪</span>`
+  return `<span class="setup-status-badge setup-status-pending">✗ 未就绪</span>`
 }
 
 function renderSteps(page, { node, git, cliOk, config, version }) {
@@ -97,98 +110,141 @@ function renderSteps(page, { node, git, cliOk, config, version }) {
   const gitOk = git?.installed || false
   const allOk = nodeOk && cliOk && config.installed
 
-  let html = ''
+  // Update progress bar
+  const doneCount = [nodeOk, gitOk, cliOk, config.installed].filter(Boolean).length
+  const pct = Math.round((doneCount / 4) * 100)
+  const fillEl = page.querySelector('#setup-progress-fill')
+  if (fillEl) fillEl.style.width = pct + '%'
 
-  // 第一步：Node.js
+  // Compact status summary
+  let html = `
+    <div class="setup-status-list">
+      <div class="setup-status-item ${nodeOk ? 'ok' : 'pending'}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="12" cy="12" r="10"/><path d="M8 12l2 2 4-4"/></svg>
+        <span class="setup-status-name">Node.js 环境</span>
+        ${nodeOk ? `<span class="setup-status-detail">${node.version || ''}</span>` : ''}
+        ${stepIcon(nodeOk)}
+      </div>
+      <div class="setup-status-item ${gitOk ? 'ok' : 'pending'}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="12" cy="12" r="10"/><path d="M8 12l2 2 4-4"/></svg>
+        <span class="setup-status-name">Git 版本管理</span>
+        ${gitOk ? `<span class="setup-status-detail">${git.version || ''}</span>` : ''}
+        ${stepIcon(gitOk)}
+      </div>
+      <div class="setup-status-item ${cliOk ? 'ok' : 'pending'}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="12" cy="12" r="10"/><path d="M8 12l2 2 4-4"/></svg>
+        <span class="setup-status-name">OpenClaw CLI</span>
+        ${cliOk && version?.current ? `<span class="setup-status-detail">${version.current}</span>` : ''}
+        ${stepIcon(cliOk)}
+      </div>
+      <div class="setup-status-item ${config.installed ? 'ok' : 'pending'}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="12" cy="12" r="10"/><path d="M8 12l2 2 4-4"/></svg>
+        <span class="setup-status-name">配置文件</span>
+        ${config.installed && config.path ? `<span class="setup-status-detail">${config.path}</span>` : ''}
+        ${stepIcon(config.installed)}
+      </div>
+    </div>
+  `
+
+  // Detailed sections for items that need action
+
+  // 第一步：Node.js — only show details if not installed
+  if (!nodeOk) {
+    html += `
+      <div class="config-section" style="text-align:left">
+        <div class="config-section-title" style="display:flex;align-items:center;gap:4px">
+          Node.js 环境
+        </div>
+        <p style="color:var(--text-secondary);font-size:var(--font-size-sm);margin-bottom:var(--space-sm)">
+          OpenClaw 基于 Node.js 运行，请先安装。
+        </p>
+        <a class="btn btn-primary btn-sm" href="https://nodejs.org/" target="_blank" rel="noopener">下载 Node.js</a>
+        <span class="form-hint" style="margin-left:8px">安装后点击「重新检测」</span>
+        <div style="margin-top:var(--space-sm);padding:8px 12px;background:var(--bg-tertiary);border-radius:var(--radius-sm);font-size:var(--font-size-xs);color:var(--text-secondary);line-height:1.6">
+          <strong>已经装了但检测不到？</strong>
+          ${isMacPlatform()
+            ? `macOS 上从 Finder 启动可能找不到 Node.js。试试关掉 ClawPanel 后从终端启动：<br>
+               <code style="background:var(--bg-secondary);padding:2px 6px;border-radius:3px;user-select:all">open /Applications/ClawPanel.app</code>`
+            : `安装 Node.js 后点击「重新检测」或使用下方「自动扫描」，无需重启。`
+          }
+          <div style="margin-top:8px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            <button class="btn btn-secondary btn-sm" id="btn-scan-node" style="font-size:11px;padding:3px 10px">${icon('search', 12)} 自动扫描</button>
+            <span style="color:var(--text-tertiary)">或手动指定路径：</span>
+          </div>
+          <div style="margin-top:6px;display:flex;gap:6px">
+            <input id="input-node-path" type="text" placeholder="${isMacPlatform() ? '/usr/local/bin' : 'F:\\\\AI\\\\Node'}"
+              style="flex:1;padding:4px 8px;border:1px solid var(--border-primary);border-radius:var(--radius-sm);background:var(--bg-secondary);color:var(--text-primary);font-size:11px;font-family:monospace">
+            <button class="btn btn-primary btn-sm" id="btn-check-path" style="font-size:11px;padding:3px 10px">检测</button>
+          </div>
+          <div id="scan-result" style="margin-top:6px;display:none"></div>
+        </div>
+      </div>
+    `
+  }
+
+  // 第二步：Git — only show details if not installed and Node is ready
+  if (!gitOk && nodeOk) {
+    html += `
+      <div class="config-section" style="text-align:left">
+        <div class="config-section-title" style="display:flex;align-items:center;gap:4px">
+          Git 版本管理
+        </div>
+        <p style="color:var(--text-secondary);font-size:var(--font-size-sm);margin-bottom:var(--space-sm);line-height:1.5">
+          部分依赖需要 Git 下载源码。点击下方按钮自动安装，如果失败请手动安装。
+        </p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-primary btn-sm" id="btn-auto-install-git">一键安装 Git</button>
+          <a class="btn btn-secondary btn-sm" href="https://git-scm.com/downloads" target="_blank" rel="noopener">手动下载</a>
+        </div>
+        <div id="git-install-result" style="margin-top:var(--space-sm);display:none"></div>
+        <div style="margin-top:8px;font-size:var(--font-size-xs);color:var(--text-tertiary);line-height:1.5">
+          <strong>没有 Git 也能安装？</strong> 大部分情况下可以，但个别依赖可能需要 Git。建议安装以避免问题。
+        </div>
+      </div>
+    `
+  }
+
+  // 第三步：OpenClaw CLI — only show install section if not installed and Node is ready
+  if (!cliOk && nodeOk) {
+    html += `
+      <div class="config-section" style="text-align:left">
+        <div class="config-section-title" style="display:flex;align-items:center;gap:4px">
+          OpenClaw CLI
+        </div>
+        ${renderInstallSection()}
+      </div>
+    `
+  } else if (cliOk && version?.ahead_of_recommended && version?.recommended) {
+    html += `
+      <div class="config-section" style="text-align:left">
+        <div class="config-section-title" style="display:flex;align-items:center;gap:4px">
+          OpenClaw CLI
+        </div>
+        <div style="padding:8px 12px;background:var(--bg-tertiary);border-radius:var(--radius-sm);font-size:var(--font-size-xs);color:var(--warning,#f59e0b);line-height:1.6">
+          检测到当前本地 OpenClaw ${version.current || ''} 高于当前面板推荐稳定版 ${version.recommended}，可能存在兼容或稳定性风险。建议稍后到「关于」页回退到推荐版。
+        </div>
+      </div>
+    `
+  }
+  // 第四步：配置文件 — only show if CLI installed but config missing, plus custom path always
+  if (!config.installed && cliOk) {
+    html += `
+      <div class="config-section" style="text-align:left">
+        <div class="config-section-title" style="display:flex;align-items:center;gap:4px">
+          配置文件
+        </div>
+        <p style="color:var(--text-secondary);font-size:var(--font-size-sm);margin-bottom:var(--space-sm)">
+          配置文件不存在，点击下方按钮自动创建默认配置。
+        </p>
+        <button class="btn btn-primary btn-sm" id="btn-init-config">一键初始化配置</button>
+      </div>
+    `
+  }
+
+  // 自定义路径（始终显示）
   html += `
     <div class="config-section" style="text-align:left">
-      <div class="config-section-title" style="display:flex;align-items:center;gap:4px">
-        ${stepIcon(nodeOk)} Node.js 环境
-      </div>
-      ${nodeOk
-        ? `<p style="color:var(--success);font-size:var(--font-size-sm)">已安装 ${node.version || ''}</p>`
-        : `<p style="color:var(--text-secondary);font-size:var(--font-size-sm);margin-bottom:var(--space-sm)">
-            OpenClaw 基于 Node.js 运行，请先安装。
-          </p>
-          <a class="btn btn-primary btn-sm" href="https://nodejs.org/" target="_blank" rel="noopener">下载 Node.js</a>
-          <span class="form-hint" style="margin-left:8px">安装后点击「重新检测」</span>
-          <div style="margin-top:var(--space-sm);padding:8px 12px;background:var(--bg-tertiary);border-radius:var(--radius-sm);font-size:var(--font-size-xs);color:var(--text-secondary);line-height:1.6">
-            <strong>已经装了但检测不到？</strong>
-            ${isMacPlatform()
-              ? `macOS 上从 Finder 启动可能找不到 Node.js。试试关掉 ClawPanel 后从终端启动：<br>
-                 <code style="background:var(--bg-secondary);padding:2px 6px;border-radius:3px;user-select:all">open /Applications/ClawPanel.app</code>`
-              : `安装 Node.js 后点击「重新检测」或使用下方「自动扫描」，无需重启。`
-            }
-            <div style="margin-top:8px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-              <button class="btn btn-secondary btn-sm" id="btn-scan-node" style="font-size:11px;padding:3px 10px">${icon('search', 12)} 自动扫描</button>
-              <span style="color:var(--text-tertiary)">或手动指定路径：</span>
-            </div>
-            <div style="margin-top:6px;display:flex;gap:6px">
-              <input id="input-node-path" type="text" placeholder="${isMacPlatform() ? '/usr/local/bin' : 'F:\\\\AI\\\\Node'}"
-                style="flex:1;padding:4px 8px;border:1px solid var(--border-primary);border-radius:var(--radius-sm);background:var(--bg-secondary);color:var(--text-primary);font-size:11px;font-family:monospace">
-              <button class="btn btn-primary btn-sm" id="btn-check-path" style="font-size:11px;padding:3px 10px">检测</button>
-            </div>
-            <div id="scan-result" style="margin-top:6px;display:none"></div>
-          </div>`
-      }
-    </div>
-  `
-
-  // 第二步：Git
-  html += `
-    <div class="config-section" style="text-align:left;${nodeOk ? '' : 'opacity:0.4;pointer-events:none'}">
-      <div class="config-section-title" style="display:flex;align-items:center;gap:4px">
-        ${stepIcon(gitOk)} Git 版本管理
-      </div>
-      ${gitOk
-        ? `<p style="color:var(--success);font-size:var(--font-size-sm)">已安装 ${git.version || ''}</p>
-           <p style="font-size:var(--font-size-xs);color:var(--text-tertiary);margin-top:4px">✅ 已自动配置 Git 使用 HTTPS（避免 SSH 连接问题）</p>`
-        : `<p style="color:var(--text-secondary);font-size:var(--font-size-sm);margin-bottom:var(--space-sm);line-height:1.5">
-            部分依赖需要 Git 下载源码。点击下方按钮自动安装，如果失败请手动安装。
-          </p>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <button class="btn btn-primary btn-sm" id="btn-auto-install-git">一键安装 Git</button>
-            <a class="btn btn-secondary btn-sm" href="https://git-scm.com/downloads" target="_blank" rel="noopener">手动下载</a>
-          </div>
-          <div id="git-install-result" style="margin-top:var(--space-sm);display:none"></div>
-          <div style="margin-top:8px;font-size:var(--font-size-xs);color:var(--text-tertiary);line-height:1.5">
-            <strong>没有 Git 也能安装？</strong> 大部分情况下可以，但个别依赖可能需要 Git。建议安装以避免问题。
-          </div>`
-      }
-    </div>
-  `
-
-  // 第三步：OpenClaw CLI
-  html += `
-    <div class="config-section" style="text-align:left;${nodeOk ? '' : 'opacity:0.4;pointer-events:none'}">
-      <div class="config-section-title" style="display:flex;align-items:center;gap:4px">
-        ${stepIcon(cliOk)} OpenClaw CLI
-      </div>
-      ${cliOk
-        ? `<p style="color:var(--success);font-size:var(--font-size-sm)">CLI 可用</p>
-           ${version?.ahead_of_recommended && version?.recommended
-             ? `<div style="margin-top:8px;padding:8px 12px;background:var(--bg-tertiary);border-radius:var(--radius-sm);font-size:var(--font-size-xs);color:var(--warning,#f59e0b);line-height:1.6">
-                  检测到当前本地 OpenClaw ${version.current || ''} 高于当前面板推荐稳定版 ${version.recommended}，可能存在兼容或稳定性风险。建议稍后到「关于」页回退到推荐版。
-                </div>`
-             : ''}`
-        : renderInstallSection()
-      }
-    </div>
-  `
-  // 第四步：配置文件 + 自定义路径
-  html += `
-    <div class="config-section" style="text-align:left;${cliOk ? '' : 'opacity:0.4;pointer-events:none'}">
-      <div class="config-section-title" style="display:flex;align-items:center;gap:4px">
-        ${stepIcon(config.installed)} 配置文件
-      </div>
-      ${config.installed
-        ? `<p style="color:var(--success);font-size:var(--font-size-sm)">配置文件位于 ${config.path || ''}</p>`
-        : `<p style="color:var(--text-secondary);font-size:var(--font-size-sm);margin-bottom:var(--space-sm)">
-            配置文件不存在，点击下方按钮自动创建默认配置。
-          </p>
-          <button class="btn btn-primary btn-sm" id="btn-init-config">一键初始化配置</button>`
-      }
-      <details style="margin-top:var(--space-sm);cursor:pointer" id="custom-dir-details">
+      <details style="cursor:pointer" id="custom-dir-details">
         <summary style="font-size:var(--font-size-xs);color:var(--text-secondary);font-weight:600;user-select:none">
           自定义 OpenClaw 安装路径
         </summary>
@@ -213,7 +269,7 @@ function renderSteps(page, { node, git, cliOk, config, version }) {
     <div class="config-section" style="text-align:left;margin-top:var(--space-md)">
       <div class="config-section-title" style="display:flex;align-items:center;gap:6px">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z"/></svg>
-        晴辰助手
+        AI 助手
       </div>
       <p style="color:var(--text-secondary);font-size:var(--font-size-sm);margin-bottom:var(--space-sm);line-height:1.5">
         遇到安装问题？AI 助手可以帮你诊断和解决。配置好模型后，点击下方按钮${!allOk ? '，当前问题会自动发送给 AI 分析' : ''}。
@@ -594,7 +650,7 @@ function bindEvents(page, nodeOk, detectState) {
 
   const METHOD_HINTS = {
     'auto': '自动选择最优安装方式：优先使用独立安装包（零依赖、最快），失败时自动降级到 npm 编译安装。',
-    'standalone-r2': '从晴辰云 CDN 下载独立安装包，自带 Node.js 运行时，无需 npm。国内下载速度最快。',
+    'standalone-r2': '从 CDN 下载独立安装包，自带 Node.js 运行时，无需 npm。国内下载速度最快。',
     'standalone-github': '从 GitHub Releases 下载独立安装包。CDN 不可用时的备选方案。',
     'npm': '传统的 npm install 方式，需要本机已安装 Node.js 和 npm，且网络能访问 npm 仓库。',
   }
@@ -738,3 +794,56 @@ function bindEvents(page, nodeOk, detectState) {
   })
 }
 
+function showSetupGuideModal() {
+  const overlay = showContentModal({
+    title: '欢迎使用 ClawPanel',
+    width: 520,
+    content: `
+      <p style="color:var(--text-secondary);margin-bottom:var(--space-lg);line-height:1.6">
+        你已跳过初始设置。以下步骤可以帮助你快速上手：
+      </p>
+      <div class="setup-guide-steps">
+        <div class="setup-guide-step" data-nav="/setup">
+          <div class="setup-guide-step-icon" style="background:var(--accent-muted);color:var(--accent)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          </div>
+          <div class="setup-guide-step-body">
+            <div class="setup-guide-step-title">1. 安装 OpenClaw</div>
+            <div class="setup-guide-step-desc">安装 AI Agent 框架核心组件</div>
+          </div>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="opacity:0.3"><path d="M9 18l6-6-6-6"/></svg>
+        </div>
+        <div class="setup-guide-step" data-nav="/models">
+          <div class="setup-guide-step-icon" style="background:var(--success-muted);color:var(--success)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><path d="M3.27 6.96L12 12.01l8.73-5.05M12 22.08V12"/></svg>
+          </div>
+          <div class="setup-guide-step-body">
+            <div class="setup-guide-step-title">2. 配置模型</div>
+            <div class="setup-guide-step-desc">添加 AI 模型 API Key 和渠道</div>
+          </div>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="opacity:0.3"><path d="M9 18l6-6-6-6"/></svg>
+        </div>
+        <div class="setup-guide-step" data-nav="/gateway">
+          <div class="setup-guide-step-icon" style="background:var(--warning-muted);color:var(--warning)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+          </div>
+          <div class="setup-guide-step-body">
+            <div class="setup-guide-step-title">3. 启动 Gateway</div>
+            <div class="setup-guide-step-desc">启动 AI 网关服务开始使用</div>
+          </div>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="opacity:0.3"><path d="M9 18l6-6-6-6"/></svg>
+        </div>
+      </div>
+    `,
+    buttons: [{ label: '我知道了', className: 'btn btn-primary btn-sm', id: 'btn-guide-ok' }],
+  })
+  // 点击步骤卡片跳转
+  overlay.querySelectorAll('.setup-guide-step[data-nav]').forEach(step => {
+    step.style.cursor = 'pointer'
+    step.addEventListener('click', () => {
+      overlay.close()
+      navigate(step.dataset.nav)
+    })
+  })
+  overlay.querySelector('#btn-guide-ok')?.addEventListener('click', () => overlay.close())
+}

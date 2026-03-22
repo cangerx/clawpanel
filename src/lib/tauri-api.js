@@ -183,6 +183,8 @@ export const api = {
   restartGateway: () => invoke('restart_gateway'),
   doctorCheck: () => invoke('doctor_check'),
   doctorFix: () => invoke('doctor_fix'),
+  diagnoseGateway: () => invoke('diagnose_gateway'),
+  fixGateway: () => invoke('fix_gateway'),
   listOpenclawVersions: (source = 'chinese') => invoke('list_openclaw_versions', { source }),
   upgradeOpenclaw: (source = 'chinese', version = null, method = 'auto') => invoke('upgrade_openclaw', { source, version, method }),
   uninstallOpenclaw: (cleanConfig = false) => invoke('uninstall_openclaw', { cleanConfig }),
@@ -222,6 +224,55 @@ export const api = {
   getChannelPluginStatus: (pluginId) => invoke('get_channel_plugin_status', { pluginId }),
   installQqbotPlugin: () => invoke('install_qqbot_plugin'),
   installChannelPlugin: (packageName, pluginId) => invoke('install_channel_plugin', { packageName, pluginId }),
+
+  /**
+   * Web 模式流式安装插件（SSE），返回 { close() } 句柄
+   * onLog(line), onProgress(pct), onDone(result), onError(err)
+   */
+  installChannelPluginStream: (packageName, pluginId, { onLog, onProgress, onDone, onError } = {}) => {
+    if (isTauri) {
+      // Tauri 模式走原有 invoke + event 机制，不走 SSE
+      return { close() {} }
+    }
+    const ctrl = new AbortController()
+    fetch('/__api/plugin_install_stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ packageName, pluginId }),
+      signal: ctrl.signal,
+    }).then(resp => {
+      const reader = resp.body.getReader()
+      const decoder = new TextDecoder()
+      let buf = ''
+      function pump() {
+        reader.read().then(({ done, value }) => {
+          if (done) return
+          buf += decoder.decode(value, { stream: true })
+          const lines = buf.split('\n')
+          buf = lines.pop() || ''
+          let currentEvent = 'message'
+          for (const line of lines) {
+            if (line.startsWith('event: ')) {
+              currentEvent = line.slice(7).trim()
+            } else if (line.startsWith('data: ')) {
+              try {
+                const data = JSON.parse(line.slice(6))
+                if (currentEvent === 'log' && onLog) onLog(data)
+                else if (currentEvent === 'progress' && onProgress) onProgress(data)
+                else if (currentEvent === 'done' && onDone) onDone(data)
+                else if (currentEvent === 'error' && onError) onError(data)
+              } catch {}
+            }
+          }
+          pump()
+        }).catch(() => {})
+      }
+      pump()
+    }).catch(e => {
+      if (onError) onError({ message: e.message })
+    })
+    return { close() { ctrl.abort() } }
+  },
 
   // 面板配置 (clawpanel.json)
   getOpenclawDir: () => invoke('get_openclaw_dir'),

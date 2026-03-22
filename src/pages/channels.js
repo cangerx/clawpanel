@@ -113,9 +113,227 @@ const PLATFORM_REGISTRY = {
       { key: 'channelId', label: '频道 ID（可选）', placeholder: '不填则监听所有频道', required: false },
     ],
   },
+  // ── 微信 ──
+  wechat: {
+    label: '微信',
+    iconName: 'smartphone',
+    desc: '微信官方 OpenClaw 插件，扫码即可接入微信对话',
+    guide: [
+      '点击「安装」，ClawPanel 会自动执行官方安装命令完成插件部署',
+      '安装完成后终端会显示二维码，使用手机微信扫码绑定',
+      '绑定成功后即可通过微信与 AI 对话，后续会自动保持登录状态',
+    ],
+    guideFooter: '<div style="margin-top:8px;font-size:var(--font-size-xs);color:var(--text-tertiary)">官方插件由腾讯微信团队开发维护，详见 <a href="https://finance.sina.cn/tech/2026-03-22/detail-inhrvnny2292312.d.html" target="_blank" style="color:var(--accent);text-decoration:underline">微信 OpenClaw 插件发布公告</a></div>',
+    fields: [],
+    pluginRequired: '@tencent-weixin/openclaw-weixin-cli@latest',
+    pluginId: 'wechat-clawbot',
+  },
+  whatsapp: {
+    label: 'WhatsApp',
+    iconName: 'phone',
+    desc: '扫码登录 WhatsApp，OpenClaw 内置 Web 桥接',
+    guide: [
+      '保存配置后，OpenClaw 会启动 WhatsApp Web 桥接',
+      '使用手机 WhatsApp 扫描终端中显示的二维码完成登录',
+      '登录成功后即可通过 WhatsApp 与 AI 对话',
+    ],
+    fields: [
+      { key: 'phoneNumber', label: '手机号（可选）', placeholder: '+86xxxxxxxxx，用于标识账号', required: false },
+    ],
+  },
+  slack: {
+    label: 'Slack',
+    iconName: 'hash',
+    desc: '通过 Slack App 接入工作区，支持 Socket Mode',
+    guide: [
+      '前往 <a href="https://api.slack.com/apps" target="_blank" style="color:var(--accent);text-decoration:underline">Slack API</a> 创建新 App',
+      '在 <b>OAuth & Permissions</b> 中添加 Bot Token Scopes：<code>chat:write</code>、<code>app_mentions:read</code>、<code>im:history</code>',
+      '启用 <b>Socket Mode</b>，生成 App-Level Token（<code>connections:write</code> scope）',
+      '安装 App 到工作区，复制 <b>Bot Token</b>（xoxb-）和 <b>App Token</b>（xapp-）填入下方',
+    ],
+    fields: [
+      { key: 'botToken', label: 'Bot Token', placeholder: 'xoxb-xxxx', secret: true, required: true },
+      { key: 'appToken', label: 'App Token', placeholder: 'xapp-xxxx', secret: true, required: true },
+      { key: 'signingSecret', label: 'Signing Secret', placeholder: '可选，用于验证请求来源', secret: true, required: false },
+    ],
+  },
+  signal: {
+    label: 'Signal',
+    iconName: 'shield-check',
+    desc: '通过 Signal CLI 或 signal-cli-rest-api 接入',
+    guide: [
+      '安装并配置 <a href="https://github.com/AsamK/signal-cli" target="_blank" style="color:var(--accent);text-decoration:underline">signal-cli</a> 或使用 Docker 版 REST API',
+      '使用 <code>signal-cli register</code> 注册手机号并完成验证',
+      '填入手机号和 Signal CLI REST API 地址',
+    ],
+    fields: [
+      { key: 'phoneNumber', label: '手机号', placeholder: '+86xxxxxxxxx', required: true },
+      { key: 'signalCliUrl', label: 'Signal CLI URL', placeholder: 'http://localhost:8080', required: true },
+    ],
+  },
+  googlechat: {
+    label: 'Google Chat',
+    iconName: 'message-circle',
+    desc: '通过 Google Workspace Service Account 接入',
+    guide: [
+      '在 <a href="https://console.cloud.google.com/" target="_blank" style="color:var(--accent);text-decoration:underline">Google Cloud Console</a> 创建项目并启用 Chat API',
+      '创建 Service Account 并下载 JSON 密钥文件',
+      '在 Google Chat API 配置中设置 Bot，将 JSON 内容和 Space ID 填入下方',
+    ],
+    fields: [
+      { key: 'serviceAccountJson', label: 'Service Account JSON', placeholder: '粘贴 JSON 密钥内容', secret: true, required: true },
+      { key: 'spaceId', label: 'Space ID', placeholder: 'spaces/xxxxxx', required: false },
+    ],
+  },
+  bluebubbles: {
+    label: 'BlueBubbles',
+    iconName: 'message-circle',
+    desc: '通过 BlueBubbles Server 接入 iMessage（需 macOS）',
+    guide: [
+      '在 Mac 上安装 <a href="https://bluebubbles.app" target="_blank" style="color:var(--accent);text-decoration:underline">BlueBubbles Server</a>',
+      '启动 Server 后获取连接地址和密码',
+      '将 Server URL 和密码填入下方表单',
+    ],
+    fields: [
+      { key: 'serverUrl', label: 'Server URL', placeholder: 'http://localhost:1234', required: true },
+      { key: 'password', label: 'Password', placeholder: 'BlueBubbles 服务器密码', secret: true, required: true },
+    ],
+  },
+  webchat: {
+    label: 'WebChat',
+    iconName: 'layout',
+    desc: 'OpenClaw 内置 Web 聊天界面，开箱即用',
+    guide: [
+      'WebChat 是 OpenClaw 内置的网页聊天界面，无需额外配置',
+      '保存后可通过浏览器访问指定端口与 AI 对话',
+      '适合快速测试或作为简易客服入口',
+    ],
+    fields: [
+      { key: 'port', label: '端口', placeholder: '3210（默认）', required: false },
+      { key: 'title', label: '页面标题（可选）', placeholder: 'AI 助手', required: false },
+    ],
+  },
+  // ── 企业微信 ──
+  wecom: {
+    label: '企业微信',
+    iconName: 'briefcase',
+    desc: '企业微信官方 OpenClaw 插件，支持长连接机器人、文档 MCP、群聊等',
+    guide: [
+      '点击「安装」自动部署企业微信 OpenClaw 插件',
+      '前往 <a href="https://work.weixin.qq.com/wework_admin/frame#apps" target="_blank" style="color:var(--accent);text-decoration:underline">企业微信管理后台</a>，创建 AI 机器人并获取 <b>Bot ID</b> 和 <b>Secret</b>',
+      '将 Bot ID 和 Secret 填入下方表单，保存后扫码绑定即可使用',
+      '支持私聊、群聊、文档创建、智能表格等企业微信生态能力',
+    ],
+    guideFooter: '<div style="margin-top:8px;font-size:var(--font-size-xs);color:var(--text-tertiary)">详细教程：<a href="https://work.weixin.qq.com/nl/index/openclaw" target="_blank" style="color:var(--accent);text-decoration:underline">企业微信 × OpenClaw 官方指南</a>。插件使用 WebSocket 长连接，无需公网回调地址。</div>',
+    fields: [
+      { key: 'botId', label: 'Bot ID', placeholder: '企业微信 AI 机器人 ID', required: true },
+      { key: 'secret', label: 'Secret', placeholder: '机器人密钥', secret: true, required: true },
+    ],
+    pluginRequired: '@sunnoy/wecom',
+    pluginId: 'wecom',
+  },
+  irc: {
+    label: 'IRC',
+    iconName: 'hash',
+    desc: '接入 IRC 服务器频道，支持主流 IRC 网络',
+    guide: [
+      '确定要接入的 IRC 服务器地址和频道',
+      '设置机器人昵称，填入下方表单',
+      '保存后自动安装 IRC 插件并连接',
+    ],
+    fields: [
+      { key: 'server', label: '服务器', placeholder: 'irc.libera.chat', required: true },
+      { key: 'port', label: '端口', placeholder: '6697', required: false },
+      { key: 'nick', label: '昵称', placeholder: 'openclaw-bot', required: true },
+      { key: 'channel', label: '频道', placeholder: '#mychannel', required: true },
+    ],
+    pluginRequired: 'openclaw-irc',
+    pluginId: 'irc',
+  },
+  mattermost: {
+    label: 'Mattermost',
+    iconName: 'message-square',
+    desc: '接入 Mattermost 团队协作平台',
+    guide: [
+      '在 Mattermost 管理后台创建 Bot 账号',
+      '获取 Bot Token 和服务器地址',
+      '填入下方表单，保存后自动安装插件',
+    ],
+    fields: [
+      { key: 'serverUrl', label: 'Server URL', placeholder: 'https://mattermost.example.com', required: true },
+      { key: 'botToken', label: 'Bot Token', placeholder: 'xxxx-xxxx-xxxx', secret: true, required: true },
+    ],
+    pluginRequired: 'openclaw-mattermost',
+    pluginId: 'mattermost',
+  },
+  teams: {
+    label: 'Teams',
+    iconName: 'users',
+    desc: '接入 Microsoft Teams，通过 Bot Framework 通信',
+    guide: [
+      '在 <a href="https://dev.teams.microsoft.com/" target="_blank" style="color:var(--accent);text-decoration:underline">Teams Developer Portal</a> 注册 Bot',
+      '在 Azure AD 中创建应用注册，获取 App ID 和 Password',
+      '填入下方表单，保存后自动安装插件',
+    ],
+    fields: [
+      { key: 'appId', label: 'App ID', placeholder: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx', required: true },
+      { key: 'appPassword', label: 'App Password', placeholder: '应用密码', secret: true, required: true },
+      { key: 'tenantId', label: 'Tenant ID', placeholder: '可选，单租户模式填写', required: false },
+    ],
+    pluginRequired: 'openclaw-teams',
+    pluginId: 'teams',
+  },
+  line: {
+    label: 'LINE',
+    iconName: 'smartphone',
+    desc: '接入 LINE Messaging API',
+    guide: [
+      '前往 <a href="https://developers.line.biz/" target="_blank" style="color:var(--accent);text-decoration:underline">LINE Developers</a> 创建 Messaging API Channel',
+      '获取 <b>Channel Access Token</b> 和 <b>Channel Secret</b>',
+      '填入下方表单，保存后自动安装插件',
+    ],
+    fields: [
+      { key: 'channelAccessToken', label: 'Channel Access Token', placeholder: 'Long-lived token', secret: true, required: true },
+      { key: 'channelSecret', label: 'Channel Secret', placeholder: 'Channel secret', secret: true, required: true },
+    ],
+    pluginRequired: 'openclaw-line',
+    pluginId: 'line',
+  },
+  matrix: {
+    label: 'Matrix',
+    iconName: 'server',
+    desc: '接入 Matrix 去中心化通信协议（Element 等客户端）',
+    guide: [
+      '在 Matrix homeserver 上创建 Bot 账号',
+      '获取 Access Token（可通过 Element 登录后在设置中查看）',
+      '填入 Homeserver URL、Access Token 和 Bot 的 User ID',
+    ],
+    fields: [
+      { key: 'homeserverUrl', label: 'Homeserver URL', placeholder: 'https://matrix.org', required: true },
+      { key: 'accessToken', label: 'Access Token', placeholder: 'syt_xxxxx', secret: true, required: true },
+      { key: 'userId', label: 'User ID', placeholder: '@bot:matrix.org', required: true },
+    ],
+    pluginRequired: 'openclaw-matrix',
+    pluginId: 'matrix',
+  },
+  twitch: {
+    label: 'Twitch',
+    iconName: 'tv',
+    desc: '接入 Twitch 直播聊天频道',
+    guide: [
+      '前往 <a href="https://dev.twitch.tv/console" target="_blank" style="color:var(--accent);text-decoration:underline">Twitch Developer Console</a> 注册应用',
+      '获取 OAuth Token（可使用 <a href="https://twitchapps.com/tmi/" target="_blank" style="color:var(--accent);text-decoration:underline">TMI Token Generator</a>）',
+      '填入 OAuth Token、频道名和 Client ID',
+    ],
+    fields: [
+      { key: 'oauthToken', label: 'OAuth Token', placeholder: 'oauth:xxxxxx', secret: true, required: true },
+      { key: 'channel', label: '频道名', placeholder: 'your_channel', required: true },
+      { key: 'clientId', label: 'Client ID', placeholder: '可选', required: false },
+    ],
+    pluginRequired: 'openclaw-twitch',
+    pluginId: 'twitch',
+  },
 }
-
-// ── 页面生命周期 ──
 
 export async function render() {
   const page = document.createElement('div')
@@ -124,12 +342,12 @@ export async function render() {
   page.innerHTML = `
     <div class="page-header">
       <h1 class="page-title">消息渠道</h1>
-      <p class="page-desc">支持 QQ、Telegram、Discord、飞书、钉钉等消息渠道接入</p>
+      <p class="page-desc">支持 20+ 消息渠道接入，包括 QQ、Telegram、Discord、飞书、钉钉、微信、WhatsApp、Slack 等</p>
     </div>
     <div id="platforms-configured" style="margin-bottom:var(--space-lg)"></div>
     <div class="config-section">
-      <div class="config-section-title">可接入平台</div>
-      <div id="platforms-available" class="platforms-grid"></div>
+      <div class="config-section-title">全部渠道</div>
+      <div id="platforms-all" class="platforms-grid"></div>
     </div>
   `
 
@@ -156,6 +374,22 @@ async function loadPlatforms(page, state) {
     const config = await api.readOpenclawConfig()
     state.bindings = Array.isArray(config?.bindings) ? config.bindings : []
   } catch { state.bindings = [] }
+
+  // 加载所有需要插件的渠道的安装状态
+  state.pluginStatus = {}
+  const pluginChecks = Object.entries(PLATFORM_REGISTRY)
+    .filter(([, reg]) => reg.pluginRequired)
+    .map(async ([pid, reg]) => {
+      const pluginId = reg.pluginId || pid
+      try {
+        const status = await api.getChannelPluginStatus(pluginId)
+        state.pluginStatus[pid] = { installed: !!status?.installed, builtin: !!status?.builtin }
+      } catch {
+        state.pluginStatus[pid] = { installed: false, builtin: false }
+      }
+    })
+  await Promise.allSettled(pluginChecks)
+
   renderConfigured(page, state)
   renderAvailable(page, state)
 }
@@ -233,25 +467,59 @@ function renderConfigured(page, state) {
 // ── 可接入平台渲染 ──
 
 function renderAvailable(page, state) {
-  const el = page.querySelector('#platforms-available')
   const configuredIds = new Set(state.configured.map(p => p.id))
+  const entries = Object.entries(PLATFORM_REGISTRY)
+  const container = page.querySelector('#platforms-all')
 
-  el.innerHTML = Object.entries(PLATFORM_REGISTRY).map(([pid, reg]) => {
+  container.innerHTML = entries.map(([pid, reg]) => {
     const done = configuredIds.has(pid)
+    const needsPlugin = !!reg.pluginRequired
+    const pluginOk = !needsPlugin || state.pluginStatus[pid]?.installed || state.pluginStatus[pid]?.builtin
+
+    let badge = ''
+    let actionLabel = ''
+    if (done) {
+      badge = `<span class="channel-badge channel-badge-active">${icon('check', 12)} 已接入</span>`
+      actionLabel = '绑定 Agent'
+    } else if (!needsPlugin || pluginOk) {
+      badge = needsPlugin
+        ? `<span class="channel-badge channel-badge-installed">${icon('package', 12)} 已安装</span>`
+        : `<span class="channel-badge channel-badge-builtin">内置</span>`
+      actionLabel = '配置接入'
+    } else {
+      badge = `<span class="channel-badge channel-badge-notinstalled">未安装</span>`
+      actionLabel = '安装插件'
+    }
+
     return `
       <button class="platform-pick" data-pid="${pid}">
         <span class="platform-emoji">${icon(reg.iconName, 28)}</span>
         <span class="platform-pick-name">${reg.label}</span>
         <span class="platform-pick-desc">${reg.desc}</span>
-        ${done ? `<span class="platform-pick-badge" style="color:var(--success)">已接入 · 点击绑定新 Agent</span>` : ''}
+        <span class="platform-pick-footer">
+          ${badge}
+          <span class="platform-pick-action">${actionLabel} →</span>
+        </span>
       </button>
     `
   }).join('')
 
-  el.querySelectorAll('.platform-pick').forEach(btn => {
+  container.querySelectorAll('.platform-pick').forEach(btn => {
     const pid = btn.dataset.pid
     const done = configuredIds.has(pid)
-    btn.onclick = () => done ? openBindAgentDialog(pid, page, state) : openConfigDialog(pid, page, state)
+    const reg = PLATFORM_REGISTRY[pid]
+    const needsPlugin = !!reg?.pluginRequired
+    const pluginOk = !needsPlugin || state.pluginStatus[pid]?.installed || state.pluginStatus[pid]?.builtin
+
+    btn.onclick = () => {
+      if (done) {
+        openBindAgentDialog(pid, page, state)
+      } else if (!pluginOk) {
+        openInstallDialog(pid, page, state)
+      } else {
+        openConfigDialog(pid, page, state)
+      }
+    }
   })
 }
 
@@ -305,6 +573,173 @@ async function openBindAgentDialog(pid, page, state) {
       await loadPlatforms(page, state)
     } catch (e) {
       toast('绑定失败: ' + e, 'error')
+    }
+  }
+}
+
+// ── 插件安装弹窗（安装成功后自动打开配置） ──
+
+async function openInstallDialog(pid, page, state) {
+  const reg = PLATFORM_REGISTRY[pid]
+  if (!reg || !reg.pluginRequired) return
+
+  let pluginPackage = reg.pluginRequired
+  let pluginId = reg.pluginId || pid
+
+  // 飞书特殊处理
+  if (pid === 'feishu') {
+    const savedVersion = localStorage.getItem('clawpanel-feishu-plugin-version') || 'builtin'
+    if (savedVersion === 'official') {
+      pluginPackage = 'openclaw-lark'
+      pluginId = 'openclaw-lark'
+    }
+  }
+
+  const guideHtml = reg.guide?.length ? `
+    <ol style="margin:0 0 var(--space-md);padding-left:20px;font-size:var(--font-size-sm);color:var(--text-secondary);line-height:1.8">
+      ${reg.guide.map(s => `<li>${s}</li>`).join('')}
+    </ol>
+    ${reg.guideFooter || ''}
+  ` : ''
+
+  const modal = showContentModal({
+    title: `安装 ${reg.label}`,
+    content: `
+      <div style="margin-bottom:var(--space-md)">
+        <div style="display:flex;align-items:center;gap:var(--space-sm);margin-bottom:var(--space-md)">
+          <span>${icon(reg.iconName, 32)}</span>
+          <div>
+            <div style="font-weight:600">${reg.label}</div>
+            <div style="font-size:var(--font-size-sm);color:var(--text-secondary)">${reg.desc}</div>
+          </div>
+        </div>
+        ${guideHtml}
+      </div>
+      <div id="install-progress-area"></div>
+    `,
+    buttons: [
+      { label: '开始安装', className: 'btn btn-primary', id: 'btn-start-install' },
+    ],
+    width: 500,
+  })
+
+  // 外部链接用系统浏览器打开
+  modal.addEventListener('click', (e) => {
+    const a = e.target.closest('a[href]')
+    if (!a) return
+    const href = a.getAttribute('href')
+    if (href && (href.startsWith('http://') || href.startsWith('https://'))) {
+      e.preventDefault()
+      import('@tauri-apps/plugin-shell').then(({ open }) => open(href)).catch(() => window.open(href, '_blank'))
+    }
+  })
+
+  const btnInstall = modal.querySelector('#btn-start-install')
+  const progressArea = modal.querySelector('#install-progress-area')
+
+  btnInstall.onclick = async () => {
+    btnInstall.disabled = true
+    btnInstall.textContent = '安装中...'
+
+    progressArea.innerHTML = `
+      <div style="background:var(--bg-tertiary);border-radius:var(--radius-md);padding:12px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          ${icon('download', 14)}
+          <span style="font-size:var(--font-size-sm);font-weight:600">安装插件</span>
+          <span id="install-pct" style="font-size:var(--font-size-xs);color:var(--text-tertiary);margin-left:auto">0%</span>
+        </div>
+        <div style="height:4px;background:var(--bg-secondary);border-radius:2px;overflow:hidden;margin-bottom:8px">
+          <div id="install-bar" style="height:100%;background:var(--accent);width:0%;transition:width 0.3s"></div>
+        </div>
+        <div id="install-log" style="font-family:var(--font-mono);font-size:11px;color:var(--text-secondary);max-height:150px;overflow-y:auto;line-height:1.6;white-space:pre-wrap;word-break:break-all"></div>
+      </div>
+    `
+    const logBox = progressArea.querySelector('#install-log')
+    const bar = progressArea.querySelector('#install-bar')
+    const pct = progressArea.querySelector('#install-pct')
+    const updateProgress = (v) => { bar.style.width = v + '%'; pct.textContent = v + '%' }
+    const appendLog = (line) => { logBox.textContent += line + '\n'; logBox.scrollTop = logBox.scrollHeight }
+
+    let success = false
+    const isTauriEnv = !!window.__TAURI_INTERNALS__
+
+    if (isTauriEnv) {
+      let unlistenLog, unlistenProgress
+      try {
+        const { listen } = await import('@tauri-apps/api/event')
+        unlistenLog = await listen('plugin-log', (e) => appendLog(e.payload))
+        unlistenProgress = await listen('plugin-progress', (e) => updateProgress(e.payload))
+      } catch {}
+      try {
+        if (pid === 'qqbot') await api.installQqbotPlugin()
+        else await api.installChannelPlugin(pluginPackage, pluginId)
+        success = true
+      } catch (e) {
+        appendLog('安装失败: ' + e)
+      }
+      if (unlistenLog) unlistenLog()
+      if (unlistenProgress) unlistenProgress()
+    } else {
+      try {
+        await new Promise((resolve, reject) => {
+          const handle = api.installChannelPluginStream(pluginPackage, pluginId, {
+            onLog: (line) => appendLog(line),
+            onProgress: (v) => updateProgress(v),
+            onDone: () => resolve(),
+            onError: (err) => reject(new Error(err.message || '安装失败')),
+          })
+          setTimeout(() => { handle.close(); reject(new Error('安装超时')) }, 120000)
+        })
+        success = true
+      } catch (e) {
+        appendLog('安装失败: ' + e.message)
+      }
+    }
+
+    if (success) {
+      // 验证安装是否成功
+      let verified = false
+      try {
+        const status = await api.getChannelPluginStatus(pluginId)
+        verified = !!status?.installed || !!status?.builtin
+      } catch {}
+
+      if (verified) {
+        state.pluginStatus[pid] = { installed: true, builtin: false }
+        progressArea.innerHTML = `
+          <div style="background:var(--success-muted);color:var(--success);padding:12px 14px;border-radius:var(--radius-md);font-size:var(--font-size-sm);display:flex;align-items:center;gap:8px">
+            ${icon('check', 16)} 安装成功！
+          </div>
+        `
+        btnInstall.textContent = '继续配置'
+        btnInstall.disabled = false
+        btnInstall.className = 'btn btn-primary'
+        btnInstall.onclick = () => {
+          modal.close?.() || modal.remove?.()
+          // 微信无需额外配置字段，直接刷新列表
+          if (reg.fields.length === 0) {
+            loadPlatforms(page, state)
+          } else {
+            openConfigDialog(pid, page, state)
+          }
+        }
+      } else {
+        progressArea.innerHTML += `
+          <div style="background:var(--warning-muted, #fef3c7);color:var(--warning, #d97706);padding:10px 14px;border-radius:var(--radius-md);font-size:var(--font-size-sm);margin-top:var(--space-sm)">
+            ${icon('alert-triangle', 14)} 安装命令已执行，但未检测到插件。请检查终端输出或手动安装后重试。
+          </div>
+        `
+        btnInstall.textContent = '重试安装'
+        btnInstall.disabled = false
+        btnInstall.onclick = () => {
+          modal.close?.() || modal.remove?.()
+          openInstallDialog(pid, page, state)
+        }
+      }
+    } else {
+      toast('插件安装失败，请检查网络或手动安装', 'error')
+      btnInstall.textContent = '重试安装'
+      btnInstall.disabled = false
     }
   }
 }
@@ -587,76 +1022,22 @@ async function openConfigDialog(pid, page, state) {
     btnSave.textContent = '保存中...'
 
     try {
-      // 如果需要安装插件，先安装并显示日志
+      // 插件检查：如果需要插件但未安装，提示先安装
       if (reg.pluginRequired) {
-        // 飞书特殊处理：根据用户选择的插件版本决定安装包
-        let pluginPackage = reg.pluginRequired
         let pluginId = reg.pluginId || pid
         if (pid === 'feishu') {
           const pluginVersionField = modal.querySelector('[data-name="pluginVersion"]')
           const pluginVersion = pluginVersionField?.value || 'builtin'
           localStorage.setItem('clawpanel-feishu-plugin-version', pluginVersion)
-          if (pluginVersion === 'official') {
-            pluginPackage = 'openclaw-lark'
-            pluginId = 'openclaw-lark'
-          }
+          if (pluginVersion === 'official') pluginId = 'openclaw-lark'
         }
         const pluginStatus = await api.getChannelPluginStatus(pluginId)
-        // 跳过安装：插件已安装 或 已内置（新版 OpenClaw 内置了 feishu 等插件）
         if (!pluginStatus?.installed && !pluginStatus?.builtin) {
-          btnSave.textContent = '安装插件中...'
-          resultEl.innerHTML = `
-            <div style="background:var(--bg-tertiary);border-radius:var(--radius-md);padding:12px;margin-top:var(--space-sm)">
-              <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-                ${icon('download', 14)}
-                <span style="font-size:var(--font-size-sm);font-weight:600">安装插件</span>
-                <span id="plugin-progress-text" style="font-size:var(--font-size-xs);color:var(--text-tertiary);margin-left:auto">0%</span>
-              </div>
-              <div style="height:4px;background:var(--bg-secondary);border-radius:2px;overflow:hidden;margin-bottom:8px">
-                <div id="plugin-progress-bar" style="height:100%;background:var(--accent);width:0%;transition:width 0.3s"></div>
-              </div>
-              <div id="plugin-log-box" style="font-family:var(--font-mono);font-size:11px;color:var(--text-secondary);max-height:120px;overflow-y:auto;line-height:1.6;white-space:pre-wrap;word-break:break-all"></div>
-            </div>
-          `
-          const logBox = resultEl.querySelector('#plugin-log-box')
-          const progressBar = resultEl.querySelector('#plugin-progress-bar')
-          const progressText = resultEl.querySelector('#plugin-progress-text')
-          let unlistenLog, unlistenProgress
-          try {
-            const { listen } = await import('@tauri-apps/api/event')
-            unlistenLog = await listen('plugin-log', (e) => {
-              logBox.textContent += e.payload + '\n'
-              logBox.scrollTop = logBox.scrollHeight
-            })
-            unlistenProgress = await listen('plugin-progress', (e) => {
-              const pct = e.payload
-              progressBar.style.width = pct + '%'
-              progressText.textContent = pct + '%'
-            })
-          } catch {}
-
-          try {
-            if (pid === 'qqbot') {
-              await api.installQqbotPlugin()
-            } else {
-              await api.installChannelPlugin(pluginPackage, pluginId)
-            }
-          } catch (e) {
-            toast('插件安装失败: ' + e, 'error')
-            btnSave.disabled = false
-            btnVerify.disabled = false
-            btnSave.textContent = isEdit ? '保存' : '接入并保存'
-            if (unlistenLog) unlistenLog()
-            if (unlistenProgress) unlistenProgress()
-            return
-          }
-          if (unlistenLog) unlistenLog()
-          if (unlistenProgress) unlistenProgress()
-        } else {
-          resultEl.innerHTML = `
-            <div style="background:var(--accent-muted);color:var(--accent);padding:10px 14px;border-radius:var(--radius-md);font-size:var(--font-size-sm)">
-              ${icon('check', 14)} 已检测到插件，无需重复安装，本次仅更新配置
-            </div>`
+          toast('请先安装插件后再配置', 'warning')
+          btnSave.disabled = false
+          btnVerify.disabled = false
+          btnSave.textContent = isEdit ? '保存' : '接入并保存'
+          return
         }
       }
 

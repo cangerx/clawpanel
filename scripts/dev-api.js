@@ -1047,6 +1047,9 @@ function findOpenclawBin() {
     '/usr/bin/openclaw',
     '/snap/bin/openclaw',
     path.join(home, '.local/bin/openclaw'),
+    // standalone 安装目录
+    path.join(home, '.openclaw-bin/openclaw'),
+    path.join(home, '.openclaw-bin/bin/openclaw'),
   ]
 
   // nvm
@@ -1091,6 +1094,47 @@ function findOpenclawBin() {
     if (fs.existsSync(p)) return p
   }
   return null
+}
+
+/**
+ * 备用插件安装：当 openclaw plugins install 因 openclaw.extensions 缺失而失败时，
+ * 直接用 npm 安装到 plugins 目录，并自动补全 openclaw.extensions 字段。
+ * 跨平台兼容 macOS / Linux / Windows。
+ */
+function fallbackInstallPlugin(packageName, pluginId) {
+  const pluginsDir = path.join(OPENCLAW_DIR, 'plugins')
+  if (!fs.existsSync(pluginsDir)) fs.mkdirSync(pluginsDir, { recursive: true })
+
+  // Ensure plugins/package.json exists (npm needs it)
+  const pluginsPkgPath = path.join(pluginsDir, 'package.json')
+  if (!fs.existsSync(pluginsPkgPath)) {
+    fs.writeFileSync(pluginsPkgPath, JSON.stringify({ name: 'openclaw-plugins', private: true, dependencies: {} }, null, 2))
+  }
+
+  const npmCmd = isWindows ? 'npm.cmd' : 'npm'
+  execSync(`${npmCmd} install ${packageName} --save`, {
+    cwd: pluginsDir,
+    timeout: 120000,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
+
+  // Patch openclaw.extensions if missing
+  const pkgJsonPath = path.join(pluginsDir, 'node_modules', pluginId, 'package.json')
+  if (fs.existsSync(pkgJsonPath)) {
+    const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, 'utf8'))
+    if (!pkg['openclaw.extensions'] && !pkg.openclaw?.extensions) {
+      // Auto-detect entry point
+      let entry = './dist/index.js'
+      if (pkg.main) entry = pkg.main
+      else if (pkg.exports?.['.']) {
+        const exp = pkg.exports['.']
+        entry = typeof exp === 'string' ? exp : (exp.require || exp.default || exp.import || entry)
+      }
+      pkg['openclaw.extensions'] = [entry]
+      fs.writeFileSync(pkgJsonPath, JSON.stringify(pkg, null, 2))
+    }
+  }
 }
 
 function linuxCheckGateway() {
@@ -1530,7 +1574,9 @@ const handlers = {
 
       let cliInstalled = false
       if (isMac) {
-        cliInstalled = fs.existsSync('/opt/homebrew/bin/openclaw') || fs.existsSync('/usr/local/bin/openclaw')
+        cliInstalled = fs.existsSync('/opt/homebrew/bin/openclaw')
+          || fs.existsSync('/usr/local/bin/openclaw')
+          || !!findOpenclawBin()
       } else if (isWindows) {
         try {
           const paths = [
@@ -1550,14 +1596,37 @@ const handlers = {
     })
   },
 
-  start_service({ label }) {
-    if (isMac) { macStartService(label); return true }
-    if (isLinux) { linuxStartGateway(); return true }
-    winStartGateway()
-    return true
+  async start_service({ label }) {
+    _serverCache.delete('svc_status')
+    try {
+      if (isMac) { macStartService(label) }
+      else if (isLinux) { linuxStartGateway() }
+      else { winStartGateway() }
+    } catch (e) {
+      return { started: false, hint: '启动指令执行失败: ' + (e.message || e) }
+    }
+    // 等待 2s 后验证是否真正启动
+    await new Promise(r => setTimeout(r, 2000))
+    _serverCache.delete('svc_status')
+    try {
+      const { running, pid } = isMac ? macCheckService(label) : isLinux ? linuxCheckGateway() : await winCheckGateway()
+      if (running) return true
+      // 端口兜底检测
+      const port = readGatewayPort()
+      const portOpen = await new Promise(resolve => {
+        const sock = net.createConnection(port, '127.0.0.1', () => { sock.destroy(); resolve(true) })
+        sock.on('error', () => resolve(false))
+        sock.setTimeout(2000, () => { sock.destroy(); resolve(false) })
+      })
+      if (portOpen) return true
+      return { started: false, hint: '启动指令已发送但 Gateway 未响应，请点击"诊断"查看详情' }
+    } catch {
+      return { started: false, hint: '启动指令已发送但无法检测状态' }
+    }
   },
 
   async stop_service({ label }) {
+    _serverCache.delete('svc_status')
     if (isMac) { macStopService(label); return true }
     if (isLinux) { linuxStopGateway(); return true }
     await winStopGateway()
@@ -1565,6 +1634,7 @@ const handlers = {
   },
 
   async restart_service({ label }) {
+    _serverCache.delete('svc_status')
     if (isMac) { macRestartService(label); return true }
     if (isLinux) {
       try { linuxStopGateway() } catch {}
@@ -1610,6 +1680,224 @@ const handlers = {
     } else {
       throw new Error('Windows 请使用 Tauri 桌面应用')
     }
+  },
+
+  diagnose_gateway() {
+    const results = []
+    const port = readGatewayPort()
+
+    // 1. 检测 openclaw 二进制
+    const bin = findOpenclawBin()
+    results.push({ id: 'cli', label: 'OpenClaw CLI', ok: !!bin, detail: bin || '未找到 openclaw 可执行文件', fixable: false })
+
+    // 2. 检测配置文件
+    const configOk = fs.existsSync(CONFIG_PATH)
+    results.push({ id: 'config', label: '配置文件', ok: configOk, detail: configOk ? CONFIG_PATH : '不存在: ' + CONFIG_PATH, fixable: false })
+
+    // 3. 检测 plist (macOS) / systemd (Linux)
+    if (isMac) {
+      const plistPath = path.join(homedir(), 'Library/LaunchAgents/ai.openclaw.gateway.plist')
+      const plistOk = fs.existsSync(plistPath)
+      let plistDetail = plistOk ? '正常' : `${plistPath} 不存在`
+      let plistEntryOk = true
+      // 检查 plist 中的入口文件是否存在
+      if (plistOk) {
+        try {
+          const plistContent = fs.readFileSync(plistPath, 'utf8')
+          const entryMatch = plistContent.match(/<string>(\/[^<]+index\.js)<\/string>/)
+          if (entryMatch) {
+            const entryPath = entryMatch[1]
+            if (!fs.existsSync(entryPath)) {
+              plistEntryOk = false
+              plistDetail = `入口文件不存在: ${entryPath}`
+            }
+          }
+        } catch {}
+      }
+      results.push({ id: 'plist', label: 'LaunchAgent 配置', ok: plistOk && plistEntryOk, detail: plistDetail, fixable: false })
+    } else if (isLinux) {
+      try {
+        const svcOut = execSync('systemctl --user status openclaw-gateway.service 2>&1', { encoding: 'utf8', timeout: 5000 })
+        const active = /Active:\s+active\s+\(running\)/.test(svcOut)
+        results.push({ id: 'systemd', label: 'systemd 服务', ok: active, detail: active ? '正常' : '服务未运行', fixable: false })
+      } catch {
+        results.push({ id: 'systemd', label: 'systemd 服务', ok: false, detail: '服务未安装或无法查询', fixable: false })
+      }
+    }
+
+    // 4. 检测端口占用
+    try {
+      const pids = [], names = []
+      if (isWindows) {
+        const netstatOut = execSync('netstat -ano', { encoding: 'utf8', timeout: 5000 })
+        for (const line of netstatOut.split('\n')) {
+          const m = line.match(new RegExp(`:\\s*${port}\\s+.*LISTENING\\s+(\\d+)`))
+          if (m && !pids.includes(m[1])) pids.push(m[1])
+        }
+        for (const pid of pids) {
+          try {
+            const psOut = execSync(`powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \\"ProcessId=${pid}\\" | Select-Object -ExpandProperty Name"`, { encoding: 'utf8', timeout: 5000 }).trim()
+            if (psOut) names.push(psOut)
+          } catch {}
+        }
+      } else {
+        const lsofOut = execSync(`lsof -i :${port} -sTCP:LISTEN -Fn -Fp 2>/dev/null`, { encoding: 'utf8', timeout: 5000 })
+        for (const line of lsofOut.split('\n')) {
+          if (line.startsWith('p')) pids.push(line.slice(1))
+          if (line.startsWith('n')) names.push(line.slice(1))
+        }
+      }
+      if (pids.length > 0) {
+        // 检查是否是 Gateway 自身占用
+        let isGateway = false
+        for (const pid of pids) {
+          try {
+            let cmdline
+            if (isWindows) {
+              cmdline = execSync(`powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \\"ProcessId=${pid}\\" | Select-Object -ExpandProperty CommandLine"`, { encoding: 'utf8', timeout: 5000 }).trim()
+            } else {
+              cmdline = execSync(`ps -p ${pid} -o command= 2>/dev/null`, { encoding: 'utf8', timeout: 3000 }).trim()
+            }
+            if (cmdline.includes('openclaw') && cmdline.includes('gateway')) { isGateway = true; break }
+          } catch {}
+        }
+        if (isGateway) {
+          results.push({ id: 'port', label: `端口 ${port}`, ok: true, detail: `Gateway 正在监听`, fixable: false })
+        } else {
+          let procName = '未知进程'
+          try {
+            if (isWindows) {
+              const csvOut = execSync(`tasklist /FI "PID eq ${pids[0]}" /FO CSV /NH`, { encoding: 'utf8', timeout: 3000 }).trim()
+              const csvMatch = csvOut.match(/"([^"]+)"/)
+              if (csvMatch) procName = csvMatch[1]
+            } else {
+              procName = execSync(`ps -p ${pids[0]} -o comm= 2>/dev/null`, { encoding: 'utf8', timeout: 3000 }).trim()
+            }
+          } catch {}
+          results.push({ id: 'port', label: `端口 ${port}`, ok: false, detail: `被 ${procName} (PID ${pids[0]}) 占用`, pid: pids[0], processName: procName, fixable: false })
+        }
+      } else {
+        results.push({ id: 'port', label: `端口 ${port}`, ok: true, detail: '端口空闲', fixable: false })
+      }
+    } catch {
+      results.push({ id: 'port', label: `端口 ${port}`, ok: true, detail: '端口空闲', fixable: false })
+    }
+
+    // 5. 检测残留 Gateway 进程
+    try {
+      let zombiePids = []
+      if (isWindows) {
+        const psOut = execSync('powershell -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match \'openclaw.*gateway\' } | Select-Object -ExpandProperty ProcessId"', { encoding: 'utf8', timeout: 5000 }).trim()
+        if (psOut) zombiePids = psOut.split(/\r?\n/).filter(Boolean)
+      } else {
+        const pgrepOut = execSync('pgrep -f "openclaw.*gateway" 2>/dev/null', { encoding: 'utf8', timeout: 3000 }).trim()
+        if (pgrepOut) zombiePids = pgrepOut.split('\n').filter(Boolean)
+      }
+      if (zombiePids.length > 0) {
+        results.push({ id: 'zombie', label: '残留进程', ok: false, detail: `发现 ${zombiePids.length} 个残留进程 (PID: ${zombiePids.join(', ')})`, pids: zombiePids, fixable: true })
+      } else {
+        results.push({ id: 'zombie', label: '残留进程', ok: true, detail: '无残留', fixable: false })
+      }
+    } catch {
+      results.push({ id: 'zombie', label: '残留进程', ok: true, detail: '无残留', fixable: false })
+    }
+
+    // 6. 读取最近错误日志
+    const errLogPath = path.join(LOGS_DIR, 'gateway.err.log')
+    let recentErrors = ''
+    try {
+      if (fs.existsSync(errLogPath)) {
+        const content = fs.readFileSync(errLogPath, 'utf8')
+        const lines = content.trim().split('\n')
+        recentErrors = lines.slice(-10).join('\n')
+      }
+    } catch {}
+    if (recentErrors) {
+      results.push({ id: 'errlog', label: '错误日志', ok: false, detail: recentErrors, fixable: false })
+    } else {
+      results.push({ id: 'errlog', label: '错误日志', ok: true, detail: '无近期错误', fixable: false })
+    }
+
+    return { port, checks: results, fixable: results.some(r => !r.ok && r.fixable) }
+  },
+
+  async fix_gateway() {
+    const actions = []
+    const label = 'ai.openclaw.gateway'
+
+    // 1. 杀残留 Gateway 进程
+    try {
+      let pids = []
+      if (isWindows) {
+        const psOut = execSync('powershell -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match \'openclaw.*gateway\' } | Select-Object -ExpandProperty ProcessId"', { encoding: 'utf8', timeout: 5000 }).trim()
+        if (psOut) pids = psOut.split(/\r?\n/).filter(Boolean)
+      } else {
+        const pgrepOut = execSync('pgrep -f "openclaw.*gateway" 2>/dev/null', { encoding: 'utf8', timeout: 3000 }).trim()
+        if (pgrepOut) pids = pgrepOut.split('\n').filter(Boolean)
+      }
+      if (pids.length > 0) {
+        for (const pid of pids) {
+          try {
+            if (isWindows) {
+              execSync(`taskkill /PID ${pid} /F`, { timeout: 5000 })
+            } else {
+              execSync(`kill ${pid} 2>/dev/null`)
+            }
+            actions.push(`已终止残留进程 PID ${pid}`)
+          } catch {}
+        }
+        // 等待进程退出
+        await new Promise(r => setTimeout(r, 1000))
+        if (!isWindows) {
+          // 强制 kill 仍存活的 (Windows taskkill /F already force-kills)
+          for (const pid of pids) {
+            try { execSync(`kill -0 ${pid} 2>/dev/null`); execSync(`kill -9 ${pid} 2>/dev/null`); actions.push(`已强制终止 PID ${pid}`) } catch {}
+          }
+        }
+      }
+    } catch {}
+
+    // 2. 清理服务状态并重新启动
+    if (isMac) {
+      const uid = getUid()
+      try { execSync(`launchctl bootout gui/${uid}/${label} 2>&1`); actions.push('已清理 launchctl 注册') } catch {}
+      await new Promise(r => setTimeout(r, 500))
+      try {
+        macStartService(label)
+        actions.push('已重新注册并启动 Gateway')
+      } catch (e) {
+        actions.push('重新启动失败: ' + (e.message || e))
+      }
+    } else if (isLinux) {
+      try { linuxStopGateway() } catch {}
+      await new Promise(r => setTimeout(r, 500))
+      try { linuxStartGateway(); actions.push('已重新启动 Gateway') } catch (e) { actions.push('重新启动失败: ' + (e.message || e)) }
+    } else if (isWindows) {
+      try { await winStopGateway() } catch {}
+      await new Promise(r => setTimeout(r, 500))
+      try { winStartGateway(); actions.push('已重新启动 Gateway') } catch (e) { actions.push('重新启动失败: ' + (e.message || e)) }
+    }
+
+    // 3. 等待 2s，检测是否启动成功
+    await new Promise(r => setTimeout(r, 2000))
+    _serverCache.delete('svc_status')
+    let running = false, pid = null
+    try {
+      const check = isMac ? macCheckService(label) : isLinux ? linuxCheckGateway() : await winCheckGateway()
+      running = check.running; pid = check.pid
+    } catch {}
+    // 端口兜底
+    if (!running) {
+      const port = readGatewayPort()
+      const portOpen = await new Promise(resolve => {
+        const sock = net.createConnection(port, '127.0.0.1', () => { sock.destroy(); resolve(true) })
+        sock.on('error', () => resolve(false))
+        sock.setTimeout(2000, () => { sock.destroy(); resolve(false) })
+      })
+      if (portOpen) running = true
+    }
+
+    return { success: running, actions, running, pid }
   },
 
   // === 消息渠道管理 ===
@@ -1770,13 +2058,35 @@ const handlers = {
   },
 
   install_qqbot_plugin() {
+    // Web 模式下走 SSE 流式安装，这里保留同步 fallback
     const bin = findOpenclawBin() || 'openclaw'
+    const packageName = '@sliverp/qqbot@latest'
+    const pluginId = '@sliverp/qqbot'
+    let fallbackUsed = false
+
     try {
-      execSync(`${bin} plugins install @sliverp/qqbot@latest`, { timeout: 60000, cwd: homedir() })
-      return '安装成功'
+      execSync(`${bin} plugins install ${packageName}`, { timeout: 60000, cwd: homedir() })
     } catch (e) {
-      throw new Error('QQBot 插件安装失败: ' + (e.message || e))
+      const errMsg = String(e.message || e.stderr || '')
+      // Fallback: if error is about missing openclaw.extensions, install via npm directly
+      if (errMsg.includes('openclaw.extensions')) {
+        try {
+          fallbackInstallPlugin(packageName, pluginId)
+          fallbackUsed = true
+        } catch (fallbackErr) {
+          throw new Error(`QQBot 插件安装失败: ${errMsg}\n备用安装也失败: ${fallbackErr.message}`)
+        }
+      } else {
+        throw new Error('QQBot 插件安装失败: ' + (e.message || e))
+      }
     }
+
+    // 验证安装结果
+    const pluginDir = path.join(OPENCLAW_DIR, 'plugins', 'node_modules', pluginId)
+    const installed = fs.existsSync(pluginDir) && fs.existsSync(path.join(pluginDir, 'package.json'))
+    if (!installed) throw new Error('安装命令已执行但插件目录未生成，可能安装未成功')
+    _serverCache.delete('plugins_list_output')
+    return fallbackUsed ? '安装成功（备用方式）' : '安装成功'
   },
 
   get_channel_plugin_status({ pluginId }) {
@@ -1784,14 +2094,20 @@ const handlers = {
     const pid = pluginId.trim()
     const pluginDir = path.join(OPENCLAW_DIR, 'plugins', 'node_modules', pid)
     const installed = fs.existsSync(pluginDir) && fs.existsSync(path.join(pluginDir, 'package.json'))
-    // 检测是否为内置插件
-    const bin = findOpenclawBin() || 'openclaw'
+    // 检测是否为内置插件（使用缓存避免重复调用 CLI）
     let builtin = false
-    try {
-      const result = spawnSync(bin, ['plugins', 'list'], { timeout: 10000, encoding: 'utf8', cwd: homedir() })
-      const output = (result.stdout || '') + (result.stderr || '')
-      if (output.includes(pid) && output.includes('built-in')) builtin = true
-    } catch {}
+    const cacheKey = 'plugins_list_output'
+    let pluginsOutput = _serverCache.get(cacheKey)
+    if (pluginsOutput === undefined) {
+      const bin = findOpenclawBin() || 'openclaw'
+      try {
+        const result = spawnSync(bin, ['plugins', 'list'], { timeout: 10000, encoding: 'utf8', cwd: homedir() })
+        pluginsOutput = (result.stdout || '') + (result.stderr || '')
+      } catch { pluginsOutput = '' }
+      _serverCache.set(cacheKey, pluginsOutput)
+      setTimeout(() => _serverCache.delete(cacheKey), 30000) // 30s TTL
+    }
+    if (pluginsOutput.includes(pid) && pluginsOutput.includes('built-in')) builtin = true
     const cfg = fs.existsSync(CONFIG_PATH) ? JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')) : {}
     const allowArr = cfg.plugins?.allow || []
     const allowed = allowArr.includes(pid)
@@ -1808,12 +2124,33 @@ const handlers = {
   install_channel_plugin({ packageName, pluginId }) {
     if (!packageName || !pluginId) throw new Error('packageName 和 pluginId 不能为空')
     const bin = findOpenclawBin() || 'openclaw'
+    let fallbackUsed = false
+
     try {
       execSync(`${bin} plugins install ${packageName.trim()}`, { timeout: 120000, cwd: homedir() })
-      return '安装成功'
     } catch (e) {
-      throw new Error(`插件 ${pluginId} 安装失败: ` + (e.message || e))
+      const errMsg = String(e.message || e.stderr || '')
+      // Fallback: if error is about missing openclaw.extensions, install via npm directly
+      if (errMsg.includes('openclaw.extensions')) {
+        try {
+          fallbackInstallPlugin(packageName.trim(), pluginId.trim())
+          fallbackUsed = true
+        } catch (fallbackErr) {
+          throw new Error(`插件 ${pluginId} 安装失败: ${errMsg}\n备用安装也失败: ${fallbackErr.message}`)
+        }
+      } else {
+        throw new Error(`插件 ${pluginId} 安装失败: ` + (e.message || e))
+      }
     }
+
+    // 验证安装结果
+    const pluginDir = path.join(OPENCLAW_DIR, 'plugins', 'node_modules', pluginId.trim())
+    const installed = fs.existsSync(pluginDir) && fs.existsSync(path.join(pluginDir, 'package.json'))
+    if (!installed) {
+      throw new Error(`插件 ${pluginId} 安装命令已执行但未检测到插件文件，可能安装未成功。`)
+    }
+    _serverCache.delete('plugins_list_output')
+    return fallbackUsed ? '安装成功（备用方式）' : '安装成功'
   },
 
   async pairing_list_channel({ channel }) {
@@ -3224,7 +3561,9 @@ const handlers = {
   // Gateway 安装/卸载
   install_gateway() {
     try { execSync('openclaw --version 2>&1', { windowsHide: true }) } catch { throw new Error('openclaw CLI 未安装') }
-    return execSync('openclaw gateway install 2>&1', { windowsHide: true }).toString() || 'Gateway 服务已安装'
+    const out = execSync('openclaw gateway install 2>&1', { windowsHide: true }).toString() || 'Gateway 服务已安装'
+    _serverCache.delete('svc_status')
+    return out
   },
 
   async list_openclaw_versions({ source = 'chinese' } = {}) {
@@ -3259,6 +3598,8 @@ const handlers = {
   },
 
   async upgrade_openclaw({ source = 'chinese', version, method = 'auto' } = {}) {
+    // 安装完成后需要清除服务状态缓存，确保刷新后拿到最新的 cli_installed 状态
+    const _clearStatusCache = () => { _serverCache.delete('svc_status') }
     const currentSource = detectInstalledSource()
     const pkg = npmPackageName(source)
     const recommended = recommendedVersionFor(source)
@@ -3280,6 +3621,7 @@ const handlers = {
         if (saResult) {
           const label = method === 'standalone-github' ? 'GitHub' : 'CDN'
           logs.push(`✅ standalone (${label}) 安装完成`)
+          _clearStatusCache()
           return logs.join('\n')
         }
       } catch (e) {
@@ -3319,6 +3661,7 @@ const handlers = {
         try { execSync(`${npmBin} uninstall -g ${oldPkg} 2>&1`, { timeout: 60000, windowsHide: true }) } catch {}
       }
       logs.push(`安装完成 (${pkg}@${ver})`)
+      _clearStatusCache()
       return `${logs.join('\n')}\n${out.slice(-400)}`
     } catch (e) {
       throw new Error('安装失败: ' + (e.stderr?.toString() || e.message).slice(-300))
@@ -3338,6 +3681,7 @@ const handlers = {
     if (cleanConfig && fs.existsSync(OPENCLAW_DIR)) {
       try { fs.rmSync(OPENCLAW_DIR, { recursive: true, force: true }) } catch {}
     }
+    _serverCache.delete('svc_status')
     return cleanConfig ? 'OpenClaw 已完全卸载（包括配置文件）' : 'OpenClaw 已卸载（配置文件保留）'
   },
 
@@ -3503,6 +3847,10 @@ const handlers = {
     if (!fs.existsSync(skillsDir)) fs.mkdirSync(skillsDir, { recursive: true })
     try {
       const out = execSync(`skillhub install ${JSON.stringify(slug)} --force`, { cwd: homedir(), encoding: 'utf8', timeout: 120000 })
+      // 验证安装结果
+      const name = String(slug).split('/').pop().split('@')[0]
+      const installed = name && fs.existsSync(path.join(skillsDir, name))
+      if (!installed) return { success: false, slug, output: out.trim(), error: '安装命令已执行但未检测到 Skill 目录' }
       return { success: true, slug, output: out.trim() }
     } catch (e) {
       throw new Error('安装失败: ' + (e.message || e) + '。请先安装 SkillHub CLI')
@@ -3538,6 +3886,10 @@ const handlers = {
     if (!fs.existsSync(skillsDir)) fs.mkdirSync(skillsDir, { recursive: true })
     try {
       const out = execSync(`npx -y clawhub install ${JSON.stringify(slug)}`, { cwd: homedir(), encoding: 'utf8', timeout: 120000 })
+      // 验证安装结果
+      const name = String(slug).split('/').pop().split('@')[0]
+      const installed = name && fs.existsSync(path.join(skillsDir, name))
+      if (!installed) return { success: false, slug, output: out.trim(), error: '安装命令已执行但未检测到 Skill 目录' }
       return { success: true, slug, output: out.trim() }
     } catch (e) {
       throw new Error('安装失败: ' + (e.message || e))
@@ -4255,6 +4607,89 @@ async function _apiMiddleware(req, res, next) {
       res.setHeader('Content-Type', 'application/json')
       res.end(JSON.stringify({ error: `实例「${activeInst.name}」不可达: ${e.message}` }))
     }
+    return
+  }
+
+  // --- SSE 流式插件安装 ---
+  if (cmd === 'plugin_install_stream') {
+    const args = await readBody(req)
+    const packageName = args.packageName?.trim()
+    const pluginId = args.pluginId?.trim()
+    if (!packageName) {
+      res.statusCode = 400
+      res.setHeader('Content-Type', 'application/json')
+      res.end(JSON.stringify({ error: 'packageName 不能为空' }))
+      return
+    }
+    res.setHeader('Content-Type', 'text/event-stream')
+    res.setHeader('Cache-Control', 'no-cache')
+    res.setHeader('Connection', 'keep-alive')
+    res.setHeader('X-Accel-Buffering', 'no')
+    res.flushHeaders?.()
+
+    const sendSSE = (event, data) => {
+      res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
+    }
+
+    const bin = findOpenclawBin() || 'openclaw'
+    const isQqbot = packageName.includes('qqbot')
+    const child = spawn(bin, ['plugins', 'install', packageName], {
+      cwd: homedir(),
+      env: { ...process.env, PATH: process.env.PATH },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+
+    let output = ''
+    let progress = 0
+    const progressStep = 15
+
+    const onData = (chunk) => {
+      const text = chunk.toString()
+      output += text
+      // 按行拆分推送
+      text.split(/\r?\n/).filter(Boolean).forEach(line => {
+        sendSSE('log', line)
+      })
+      // 模拟进度（npm 没有标准进度协议）
+      progress = Math.min(progress + progressStep, 90)
+      sendSSE('progress', progress)
+    }
+
+    child.stdout.on('data', onData)
+    child.stderr.on('data', onData)
+
+    child.on('close', (code) => {
+      if (code === 0) {
+        sendSSE('progress', 100)
+        sendSSE('done', { ok: true, message: '安装成功' })
+      } else {
+        // Fallback for openclaw.extensions missing
+        if (output.includes('openclaw.extensions') && pluginId) {
+          try {
+            sendSSE('log', '正在尝试备用安装方式...')
+            sendSSE('progress', 92)
+            fallbackInstallPlugin(packageName, pluginId)
+            sendSSE('progress', 100)
+            sendSSE('done', { ok: true, message: '安装成功（备用方式）' })
+          } catch (fallbackErr) {
+            sendSSE('error', { message: `插件安装失败 (exit ${code})，备用安装也失败: ${fallbackErr.message}`, output })
+          }
+        } else {
+          sendSSE('error', { message: `插件安装失败 (exit ${code})`, output })
+        }
+      }
+      res.end()
+    })
+
+    child.on('error', (err) => {
+      sendSSE('error', { message: err.message })
+      res.end()
+    })
+
+    // 客户端断开时 kill 子进程
+    req.on('close', () => {
+      if (!child.killed) child.kill()
+    })
     return
   }
 

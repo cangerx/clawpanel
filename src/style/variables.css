@@ -3,23 +3,26 @@
   --bg-primary: #f8f9fb;
   --bg-secondary: #ffffff;
   --bg-tertiary: #f0f1f3;
-  --bg-card: rgba(0, 0, 0, 0.02);
-  --bg-card-hover: rgba(0, 0, 0, 0.04);
-  --bg-glass: rgba(0, 0, 0, 0.03);
-  --bg-glass-hover: rgba(0, 0, 0, 0.06);
+  --bg-card: rgba(255, 255, 255, 0.8);
+  --bg-card-hover: rgba(255, 255, 255, 0.95);
+  --bg-glass: rgba(255, 255, 255, 0.6);
+  --bg-glass-hover: rgba(0, 0, 0, 0.04);
+  --bg-card-gradient: linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(248,249,251,0.8) 100%);
+  --bg-card-gradient-accent: linear-gradient(135deg, rgba(99,102,241,0.04) 0%, rgba(139,92,246,0.02) 100%);
 
   --border-primary: rgba(0, 0, 0, 0.08);
   --border-secondary: rgba(0, 0, 0, 0.04);
   --border-focus: rgba(99, 102, 241, 0.5);
 
   --text-primary: #18181b;
-  --text-secondary: #52525b;
+  --text-secondary: #3f3f46;
   --text-tertiary: #a1a1aa;
   --text-inverse: #ffffff;
 
   --accent: #6366f1;
   --accent-hover: #4f46e5;
   --accent-muted: rgba(99, 102, 241, 0.1);
+  --accent-subtle: rgba(99, 102, 241, 0.06);
 
   --success: #16a34a;
   --success-muted: rgba(22, 163, 74, 0.1);
@@ -30,34 +33,40 @@
   --info: #2563eb;
   --info-muted: rgba(37, 99, 235, 0.1);
 
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
-  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
-  --shadow-glow: 0 0 20px rgba(99, 102, 241, 0.1);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.08), 0 4px 12px rgba(0, 0, 0, 0.04);
+  --shadow-xl: 0 20px 60px rgba(0, 0, 0, 0.1), 0 8px 20px rgba(0, 0, 0, 0.06);
+  --shadow-glow: 0 0 24px rgba(99, 102, 241, 0.12);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
+  --shadow-card-hover: 0 8px 24px rgba(0, 0, 0, 0.08), 0 2px 6px rgba(0, 0, 0, 0.04);
 }
 
 /* 暗色主题 */
 [data-theme="dark"] {
   --bg-primary: #0a0a0f;
-  --bg-secondary: #12121a;
+  --bg-secondary: #111118;
   --bg-tertiary: #1a1a26;
-  --bg-card: rgba(255, 255, 255, 0.03);
-  --bg-card-hover: rgba(255, 255, 255, 0.06);
-  --bg-glass: rgba(255, 255, 255, 0.05);
-  --bg-glass-hover: rgba(255, 255, 255, 0.08);
+  --bg-card: rgba(255, 255, 255, 0.04);
+  --bg-card-hover: rgba(255, 255, 255, 0.07);
+  --bg-glass: rgba(255, 255, 255, 0.06);
+  --bg-glass-hover: rgba(255, 255, 255, 0.09);
+  --bg-card-gradient: linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%);
+  --bg-card-gradient-accent: linear-gradient(135deg, rgba(129,140,248,0.08) 0%, rgba(139,92,246,0.04) 100%);
 
-  --border-primary: rgba(255, 255, 255, 0.08);
-  --border-secondary: rgba(255, 255, 255, 0.04);
+  --border-primary: rgba(255, 255, 255, 0.1);
+  --border-secondary: rgba(255, 255, 255, 0.05);
   --border-focus: rgba(129, 140, 248, 0.5);
 
-  --text-primary: #e4e4e7;
+  --text-primary: #f4f4f5;
   --text-secondary: #a1a1aa;
   --text-tertiary: #71717a;
   --text-inverse: #0a0a0f;
 
   --accent: #818cf8;
   --accent-hover: #a5b4fc;
-  --accent-muted: rgba(99, 102, 241, 0.15);
+  --accent-muted: rgba(129, 140, 248, 0.15);
+  --accent-subtle: rgba(129, 140, 248, 0.08);
 
   --success: #22c55e;
   --success-muted: rgba(34, 197, 94, 0.15);
@@ -68,10 +77,13 @@
   --info: #3b82f6;
   --info-muted: rgba(59, 130, 246, 0.15);
 
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
-  --shadow-glow: 0 0 20px rgba(99, 102, 241, 0.15);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.6), 0 4px 12px rgba(0, 0, 0, 0.3);
+  --shadow-xl: 0 20px 60px rgba(0, 0, 0, 0.7), 0 8px 20px rgba(0, 0, 0, 0.4);
+  --shadow-glow: 0 0 24px rgba(129, 140, 248, 0.2);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-card-hover: 0 8px 24px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.3);
 }
 
 /* 共享变量（不随主题变化） */

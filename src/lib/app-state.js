@@ -20,6 +20,7 @@ let _listeners = []
 let _gwListeners = []
 let _gwStopCount = 0  // 连续检测到"停止"的次数，防抖用
 let _isUpgrading = false // 升级/切换版本期间，阻止 setup 跳转
+let _setupSkipped = false // 用户跳过初始设置
 let _userStopped = false // 用户主动停止，不自动拉起
 let _autoRestartCount = 0 // 自动重启次数
 let _lastRestartTime = 0  // 上次重启时间
@@ -28,14 +29,32 @@ let _guardianListeners = [] // 守护放弃时的回调
 
 /** openclaw 是否就绪（CLI 已安装 + 配置文件存在） */
 export function isOpenclawReady() {
-  // 升级期间视为就绪，避免跳转到 setup
-  if (_isUpgrading) return true
+  // 升级期间或用户跳过设置时视为就绪，避免跳转到 setup
+  if (_isUpgrading || _setupSkipped) return true
+  return _openclawReady
+}
+
+/** 实际就绪状态（不含 skip/upgrade 旁路），用于判断是否可以清除 skip 标记 */
+export function isOpenclawActuallyReady() {
   return _openclawReady
 }
 
 /** 标记升级中（阻止 setup 跳转） */
 export function setUpgrading(v) { _isUpgrading = !!v }
 export function isUpgrading() { return _isUpgrading }
+
+/** 跳过初始设置 */
+export function skipSetup() {
+  _setupSkipped = true
+  try { localStorage.setItem('clawpanel-setup-skipped', '1') } catch {}
+}
+export function isSetupSkipped() { return _setupSkipped }
+export function clearSetupSkipped() {
+  _setupSkipped = false
+  try { localStorage.removeItem('clawpanel-setup-skipped') } catch {}
+}
+// 启动时从 localStorage 恢复跳过状态
+try { _setupSkipped = localStorage.getItem('clawpanel-setup-skipped') === '1' } catch {}
 
 /** 标记用户主动停止 Gateway（不触发自动重启） */
 export function setUserStopped(v) { _userStopped = !!v }
@@ -114,6 +133,10 @@ export async function detectOpenclawStatus() {
       api.checkInstallation(),
       api.getServicesStatus(),
     ])
+
+    console.log('[detect] checkInstallation:', installation.status, installation.status === 'fulfilled' ? installation.value : installation.reason)
+    console.log('[detect] getServicesStatus:', services.status, services.status === 'fulfilled' ? services.value : services.reason)
+
     const configExists = installation.status === 'fulfilled' && installation.value?.installed
     if (installation.status === 'fulfilled' && installation.value?.platform) {
       _platform = installation.value.platform
@@ -127,11 +150,14 @@ export async function detectOpenclawStatus() {
       && services.value[0]?.cli_installed !== false
     _openclawReady = configExists && cliInstalled
 
+    console.log('[detect] configExists:', configExists, '| cliInstalled:', cliInstalled, '| ready:', _openclawReady)
+
     // 顺便检测 Gateway 运行状态
     if (services.status === 'fulfilled' && services.value?.length > 0) {
       _setGatewayRunning(services.value[0]?.running === true)
     }
-  } catch {
+  } catch (e) {
+    console.error('[detect] detectOpenclawStatus 异常:', e)
     _openclawReady = false
   }
   _listeners.forEach(fn => { try { fn(_openclawReady) } catch {} })

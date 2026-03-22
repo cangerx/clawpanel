@@ -6,7 +6,7 @@ import { api } from '../lib/tauri-api.js'
 import { toast } from '../components/toast.js'
 import { showModal, showConfirm } from '../components/modal.js'
 import { icon, statusIcon } from '../lib/icons.js'
-import { API_TYPES, PROVIDER_PRESETS, QTCOOL, MODEL_PRESETS, fetchQtcoolModels } from '../lib/model-presets.js'
+import { API_TYPES, PROVIDER_PRESETS, CANGERAPI, MODEL_PRESETS, fetchCangerModels } from '../lib/model-presets.js'
 
 export async function render() {
   const page = document.createElement('div')
@@ -29,7 +29,7 @@ export async function render() {
       <div style="flex:1;min-width:200px">
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
           ${icon('zap', 16)}
-          <span style="font-weight:600;font-size:var(--font-size-sm)">晴辰云</span>
+          <span style="font-weight:600;font-size:var(--font-size-sm)">苍洱API</span>
           <span style="font-size:10px;background:var(--primary);color:#fff;padding:1px 6px;border-radius:8px">推荐</span>
         </div>
         <div style="font-size:var(--font-size-xs);color:var(--text-secondary);line-height:1.5">
@@ -38,7 +38,7 @@ export async function render() {
       </div>
       <div style="display:flex;gap:8px;align-items:center;flex-shrink:0">
         <button class="btn btn-primary btn-sm" id="btn-qtcool-oneclick">${icon('plus', 14)} 获取模型列表</button>
-        <a href="${QTCOOL.site}" target="_blank" class="btn btn-secondary btn-sm">${icon('external-link', 12)} 了解更多</a>
+        <a href="${CANGERAPI.site}" target="_blank" class="btn btn-secondary btn-sm">${icon('external-link', 12)} 了解更多</a>
       </div>
     </div>
     <div id="default-model-bar"></div>
@@ -751,7 +751,7 @@ function bindTopActions(page, state) {
   page.querySelector('#btn-add-provider').onclick = () => addProvider(page, state)
   page.querySelector('#btn-undo').onclick = () => undo(page, state)
 
-  // 晴辰云：获取模型列表 → 弹窗让用户选择要添加的模型
+  // 苍洱API：获取模型列表 → 弹窗让用户选择要添加的模型
   page.querySelector('#btn-qtcool-oneclick').onclick = async () => {
     if (!state.config) { toast('配置未加载完成，请稍候', 'warning'); return }
 
@@ -759,7 +759,7 @@ function bindTopActions(page, state) {
     btn.textContent = '获取中...'
     btn.disabled = true
 
-    const models = await fetchQtcoolModels()
+    const models = await fetchCangerModels()
 
     btn.innerHTML = `${icon('plus', 14)} 获取模型列表`
     btn.disabled = false
@@ -770,7 +770,7 @@ function bindTopActions(page, state) {
     }
 
     // 已有的模型 ID
-    const existingProvider = (state.config.models?.providers || {})[QTCOOL.providerKey]
+    const existingProvider = (state.config.models?.providers || {})[CANGERAPI.providerKey]
     const existingIds = new Set((existingProvider?.models || []).map(m => typeof m === 'string' ? m : m.id))
 
     // 弹窗让用户勾选要添加的模型
@@ -779,7 +779,7 @@ function bindTopActions(page, state) {
     overlay.innerHTML = `
       <div class="modal" style="max-height:80vh;overflow-y:auto">
         <div class="modal-title">选择要添加的模型</div>
-        <div class="form-hint" style="margin-bottom:12px">从晴辰云获取到 ${models.length} 个可用模型，勾选需要的模型后点击添加。</div>
+        <div class="form-hint" style="margin-bottom:12px">从苍洱API获取到 ${models.length} 个可用模型，勾选需要的模型后点击添加。</div>
         <div style="margin-bottom:12px;display:flex;gap:8px">
           <button class="btn btn-sm btn-secondary" id="qtsel-all">全选</button>
           <button class="btn btn-sm btn-secondary" id="qtsel-none">全不选</button>
@@ -825,19 +825,19 @@ function bindTopActions(page, state) {
         }
         toast(added ? `已添加 ${added} 个模型` : '所选模型均已存在', added ? 'success' : 'info')
       } else {
-        state.config.models.providers[QTCOOL.providerKey] = {
-          baseUrl: QTCOOL.baseUrl,
-          apiKey: QTCOOL.defaultKey,
-          api: QTCOOL.api,
+        state.config.models.providers[CANGERAPI.providerKey] = {
+          baseUrl: CANGERAPI.baseUrl,
+          apiKey: CANGERAPI.defaultKey,
+          api: CANGERAPI.api,
           models: selectedModels.map(m => ({ ...m })),
         }
         if (!getCurrentPrimary(state.config) && selectedModels.length) {
           if (!state.config.agents) state.config.agents = {}
           if (!state.config.agents.defaults) state.config.agents.defaults = {}
           if (!state.config.agents.defaults.model) state.config.agents.defaults.model = {}
-          state.config.agents.defaults.model.primary = QTCOOL.providerKey + '/' + selectedModels[0].id
+          state.config.agents.defaults.model.primary = CANGERAPI.providerKey + '/' + selectedModels[0].id
         }
-        toast(`已添加晴辰云（${selectedModels.length} 个模型）`, 'success')
+        toast(`已添加苍洱API（${selectedModels.length} 个模型）`, 'success')
       }
       renderProviders(page, state)
       renderDefaultBar(page, state)

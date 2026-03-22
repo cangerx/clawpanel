@@ -1,7 +1,8 @@
 /* 按钮加载状态 — 任意按钮加上 .btn-loading 即可获得内联 spinner */
 .btn.btn-loading {
   pointer-events: none;
-  opacity: 0.75;
+  opacity: 0.7;
+  position: relative;
 }
 .btn.btn-loading::before {
   content: '';
@@ -10,8 +11,9 @@
   height: 14px;
   border: 2px solid currentColor;
   border-top-color: transparent;
+  border-right-color: transparent;
   border-radius: 50%;
-  animation: btn-spin 0.7s linear infinite;
+  animation: btn-spin 0.6s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
   margin-right: 6px;
   vertical-align: -2px;
   flex-shrink: 0;
@@ -38,12 +40,15 @@
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-lg);
   padding: var(--space-lg);
-  transition: all var(--transition-fast);
+  box-shadow: var(--shadow-card);
+  transition: all var(--transition-normal);
 }
 
 .card:hover {
   background: var(--bg-card-hover);
   border-color: var(--border-focus);
+  box-shadow: var(--shadow-card-hover);
+  transform: translateY(-1px);
 }
 
 /* 状态卡片 */
@@ -59,6 +64,26 @@
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-lg);
   padding: var(--space-lg);
+  box-shadow: var(--shadow-card);
+  transition: all var(--transition-normal);
+  position: relative;
+  overflow: hidden;
+}
+
+.stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--accent), rgba(139, 92, 246, 0.6));
+  opacity: 0;
+  transition: opacity var(--transition-normal);
+}
+
+.stat-card:hover::before {
+  opacity: 1;
 }
 
 .stat-card-header {
@@ -80,11 +105,16 @@
 
 .stat-card-clickable {
   cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
+  transition: border-color 0.2s, background 0.2s, box-shadow 0.2s, transform 0.2s;
 }
 .stat-card-clickable:hover {
   border-color: var(--accent);
   background: var(--bg-hover);
+  box-shadow: var(--shadow-card-hover);
+  transform: translateY(-2px);
+}
+.stat-card-clickable:hover::before {
+  opacity: 1;
 }
 
 .stat-card-meta {
@@ -117,14 +147,31 @@
   font-weight: 500;
   transition: all var(--transition-fast);
   white-space: nowrap;
+  cursor: pointer;
+  position: relative;
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .btn-primary {
   background: var(--accent);
   color: var(--text-inverse);
+  box-shadow: 0 1px 3px rgba(99, 102, 241, 0.3);
 }
 
-.btn-primary:hover { background: var(--accent-hover); }
+.btn-primary:hover {
+  background: var(--accent-hover);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35);
+  transform: translateY(-1px);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 2px rgba(99, 102, 241, 0.3);
+}
 
 .btn-secondary {
   background: var(--bg-glass);
@@ -135,6 +182,7 @@
 .btn-secondary:hover {
   background: var(--bg-glass-hover);
   color: var(--text-primary);
+  border-color: var(--border-focus);
 }
 
 .btn-danger {
@@ -142,7 +190,11 @@
   color: var(--error);
 }
 
-.btn-danger:hover { background: var(--error-muted); opacity: 0.85; }
+.btn-danger:hover {
+  background: var(--error-muted);
+  opacity: 0.85;
+  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.15);
+}
 
 .btn-sm {
   padding: var(--space-xs) var(--space-md);
@@ -170,6 +222,13 @@
 
 .form-input {
   width: 100%;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.form-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-muted);
+  outline: none;
 }
 
 /* Toast 通知 */
@@ -181,31 +240,56 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
+  pointer-events: none;
 }
 
 .toast {
   padding: var(--space-md) var(--space-lg);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   font-size: var(--font-size-sm);
-  background: var(--bg-primary);
-  border: 1px solid var(--border);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
-  animation: slideIn 250ms ease;
-  max-width: 360px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  box-shadow: var(--shadow-lg);
+  animation: toastSlideIn 300ms cubic-bezier(0.22, 1, 0.36, 1);
+  max-width: 380px;
+  pointer-events: auto;
+  backdrop-filter: blur(12px);
 }
 
-.toast.success { color: var(--success); }
-.toast.error { color: var(--error); }
-.toast.info { color: var(--info); }
-.toast.warning { color: var(--warning); }
+.toast.success {
+  color: var(--success);
+  border-left: 3px solid var(--success);
+}
+.toast.error {
+  color: var(--error);
+  border-left: 3px solid var(--error);
+}
+.toast.info {
+  color: var(--info);
+  border-left: 3px solid var(--info);
+}
+.toast.warning {
+  color: var(--warning);
+  border-left: 3px solid var(--warning);
+}
+
+.toast.toast-exit {
+  animation: toastSlideOut 200ms ease forwards;
+}
 
 [data-theme="dark"] .toast {
   background: var(--bg-secondary);
+  border-color: var(--border-primary);
 }
 
-@keyframes slideIn {
-  from { opacity: 0; transform: translateX(20px); }
-  to { opacity: 1; transform: translateX(0); }
+@keyframes toastSlideIn {
+  from { opacity: 0; transform: translateX(24px) scale(0.96); }
+  to { opacity: 1; transform: translateX(0) scale(1); }
+}
+
+@keyframes toastSlideOut {
+  from { opacity: 1; transform: translateX(0); }
+  to { opacity: 0; transform: translateX(24px); }
 }
 
 /* Tab 栏 */
@@ -223,12 +307,14 @@
   border-bottom: 2px solid transparent;
   cursor: pointer;
   transition: all var(--transition-fast);
+  position: relative;
 }
 
 .tab:hover { color: var(--text-secondary); }
 .tab.active {
   color: var(--accent-hover);
   border-bottom-color: var(--accent);
+  font-weight: 500;
 }
 
 /* 配置操作栏 */
@@ -280,26 +366,28 @@ mark {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(4px);
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 9000;
-  animation: fadeInModal 150ms ease;
+  animation: fadeInOverlay 200ms ease;
 }
 
 .modal {
   background: var(--bg-secondary);
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-xl);
-  padding: var(--space-xl);
+  padding: var(--space-xl) var(--space-2xl);
   min-width: 360px;
   max-width: 500px;
   max-height: calc(100vh - 60px);
   display: flex;
   flex-direction: column;
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-xl);
+  animation: modalSlideIn 250ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 .modal-body,
 .modal-content-body {
@@ -312,6 +400,7 @@ mark {
   font-size: var(--font-size-lg);
   font-weight: 600;
   margin-bottom: var(--space-lg);
+  color: var(--text-primary);
 }
 
 .modal-actions {
@@ -319,11 +408,18 @@ mark {
   justify-content: flex-end;
   gap: var(--space-sm);
   margin-top: var(--space-xl);
+  padding-top: var(--space-lg);
+  border-top: 1px solid var(--border-secondary);
 }
 
-@keyframes fadeInModal {
+@keyframes fadeInOverlay {
   from { opacity: 0; }
   to { opacity: 1; }
+}
+
+@keyframes modalSlideIn {
+  from { opacity: 0; transform: translateY(12px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 /* 页面加载动画 */
@@ -343,7 +439,7 @@ mark {
   border: 3px solid var(--border-primary);
   border-top-color: var(--accent);
   border-radius: 50%;
-  animation: spin 0.8s linear infinite;
+  animation: spin 0.7s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
 }
 
 .page-loader-text {
@@ -373,7 +469,7 @@ mark {
   background: var(--bg-card, #fff);
   border: 1px solid var(--border, #e4e4e7);
   border-radius: 16px;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.08);
+  box-shadow: 0 12px 48px rgba(0,0,0,0.08), 0 4px 16px rgba(0,0,0,0.04);
   text-align: center;
 }
 .login-card .login-logo {
@@ -398,16 +494,24 @@ mark {
 }
 .login-card .login-input:focus {
   border-color: var(--primary, #6366f1);
-  box-shadow: 0 0 0 3px rgba(99,102,241,0.12);
+  box-shadow: 0 0 0 3px rgba(99,102,241,0.15);
 }
 .login-card .login-btn {
   width: 100%; margin-top: 16px; padding: 10px 0;
   font-size: 14px; font-weight: 500;
   border: none; border-radius: 8px; cursor: pointer;
   background: var(--primary, #6366f1);
-  color: #fff; transition: opacity 0.2s;
+  color: #fff; transition: all 0.2s;
+  box-shadow: 0 2px 8px rgba(99,102,241,0.25);
 }
-.login-card .login-btn:hover { opacity: 0.9; }
+.login-card .login-btn:hover {
+  background: #4f46e5;
+  box-shadow: 0 4px 16px rgba(99,102,241,0.35);
+  transform: translateY(-1px);
+}
+.login-card .login-btn:active {
+  transform: translateY(0);
+}
 .login-card .login-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 .login-card .login-error {
   margin-top: 12px; font-size: 13px;
@@ -427,15 +531,15 @@ mark {
   position: absolute; inset: 0;
   cursor: pointer; border-radius: 24px;
   background: var(--border-primary, #d4d4d8);
-  transition: background 0.25s;
+  transition: background 0.25s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .toggle-slider::before {
   content: '';
   position: absolute; left: 2px; top: 2px;
   width: 20px; height: 20px; border-radius: 50%;
   background: #fff;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
-  transition: transform 0.25s;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.18);
+  transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .toggle-switch input:checked + .toggle-slider {
   background: var(--error, #ef4444);
@@ -449,8 +553,9 @@ mark {
   position: fixed;
   inset: 0;
   z-index: 1100;
-  background: rgba(0,0,0,.5);
-  backdrop-filter: blur(4px);
+  background: rgba(0,0,0,.45);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -548,8 +653,8 @@ mark {
 }
 .engage-action-card:hover {
   border-color: var(--primary, #6366f1);
-  box-shadow: 0 2px 12px rgba(99,102,241,.12);
-  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(99,102,241,.12);
+  transform: translateY(-2px);
 }
 .engage-action-icon {
   flex-shrink: 0;
