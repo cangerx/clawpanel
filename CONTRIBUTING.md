@@ -2,7 +2,7 @@
 
 感谢你对 ClawPanel 项目的关注！本文档同时作为**贡献指南**和**项目维护手册**，涵盖开发、构建、发版、部署的完整工作流。
 
-> 🌐 **官网**: [claw.qt.cool](https://claw.qt.cool/)  |  📦 **仓库**: [github.com/qingchencloud/clawpanel](https://github.com/qingchencloud/clawpanel)
+> 🌐 **官网**: [claw.qt.cool](https://claw.qt.cool/)  |  📦 **仓库**: [github.com/cangerx/clawpanel](https://github.com/cangerx/clawpanel)
 
 ---
 
@@ -39,7 +39,7 @@
 
 ```bash
 # 克隆仓库
-git clone https://github.com/qingchencloud/clawpanel.git
+git clone https://github.com/cangerx/clawpanel.git
 cd clawpanel
 
 # 安装前端依赖
@@ -452,14 +452,14 @@ ClawPanel 支持访问密码保护，**Web 模式和 Tauri 桌面端均可启用
 
 ### 1. 桌面应用（Tauri）
 
-面向 macOS / Windows / Linux 桌面用户，从 [GitHub Releases](https://github.com/qingchencloud/clawpanel/releases) 下载安装包。
+面向 macOS / Windows / Linux 桌面用户，从 [GitHub Releases](https://github.com/cangerx/clawpanel/releases) 下载安装包。
 
 ### 2. Linux 服务器（Web 版）
 
 一键部署脚本，适用于无桌面环境的 Linux 服务器：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/qingchencloud/clawpanel/main/scripts/linux-deploy.sh | bash
+curl -fsSL https://raw.githubusercontent.com/cangerx/clawpanel/main/scripts/linux-deploy.sh | bash
 ```
 
 部署后通过 `http://服务器IP:1420` 访问，自动生成默认密码。
@@ -528,8 +528,8 @@ README 中的“致谢 / Acknowledgements”用于展示历史代码贡献者和
 常用命令：
 
 ```bash
-gh pr list --repo qingchencloud/clawpanel --state all --limit 200 --json author,number,title,state
-gh issue list --repo qingchencloud/clawpanel --state all --limit 200 --json author,number,title
+gh pr list --repo cangerx/clawpanel --state all --limit 200 --json author,number,title,state
+gh issue list --repo cangerx/clawpanel --state all --limit 200 --json author,number,title
 ```
 
 推荐提交流程：
@@ -556,4 +556,4 @@ git push origin main
 
 ## 问题反馈
 
-如果发现 Bug 或有功能建议，欢迎通过 [GitHub Issues](https://github.com/qingchencloud/clawpanel/issues) 提交。
+如果发现 Bug 或有功能建议，欢迎通过 [GitHub Issues](https://github.com/cangerx/clawpanel/issues) 提交。

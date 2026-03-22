@@ -21,7 +21,7 @@ Web 模式是纯 Node.js 服务，零 GUI 依赖，最适合 ARM 板。
 ### 一键部署
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/qingchencloud/clawpanel/main/scripts/linux-deploy.sh | bash
+curl -fsSL https://raw.githubusercontent.com/cangerx/clawpanel/main/scripts/linux-deploy.sh | bash
 ```
 
 国内网络推荐使用 Gitee 镜像：
@@ -38,7 +38,7 @@ curl -fsSL https://deb.nodesource.com/setup_22.x | sudo bash -
 sudo apt-get install -y nodejs git
 
 # 2. 克隆项目
-git clone https://github.com/qingchencloud/clawpanel.git /opt/clawpanel
+git clone https://github.com/cangerx/clawpanel.git /opt/clawpanel
 cd /opt/clawpanel
 
 # 3. 安装依赖并构建

@@ -59,7 +59,7 @@
 ## 方式一：一键部署
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/qingchencloud/clawpanel/main/scripts/linux-deploy.sh | bash
+curl -fsSL https://raw.githubusercontent.com/cangerx/clawpanel/main/scripts/linux-deploy.sh | bash
 ```
 
 脚本自动完成：
@@ -122,7 +122,7 @@ openclaw init
 
 ```bash
 cd /opt
-sudo git clone https://github.com/qingchencloud/clawpanel.git
+sudo git clone https://github.com/cangerx/clawpanel.git
 sudo chown -R $(whoami) clawpanel
 cd clawpanel
 npm install
@@ -170,7 +170,7 @@ docker run -d \
   node:22-slim \
   sh -c "apt-get update && apt-get install -y git && \
     npm install -g @qingchencloud/openclaw-zh --registry https://registry.npmmirror.com && \
-    git clone https://github.com/qingchencloud/clawpanel.git /app && \
+    git clone https://github.com/cangerx/clawpanel.git /app && \
     cd /app && npm install && npm run build && npm run serve"
 ```
 

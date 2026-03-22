@@ -15,7 +15,7 @@
 请通过以下方式私下报告：
 
 1. 发送邮件至项目维护者（在 GitHub 个人主页查看联系方式）
-2. 或使用 [GitHub Security Advisories](https://github.com/qingchencloud/clawpanel/security/advisories/new) 私下报告
+2. 或使用 [GitHub Security Advisories](https://github.com/cangerx/clawpanel/security/advisories/new) 私下报告
 
 ### 报告内容应包含
 

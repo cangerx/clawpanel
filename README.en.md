@@ -11,17 +11,17 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/qingchencloud/clawpanel/releases/latest">
-    <img src="https://img.shields.io/github/v/release/qingchencloud/clawpanel?style=flat-square&color=6366f1" alt="Release">
+  <a href="https://github.com/cangerx/clawpanel/releases/latest">
+    <img src="https://img.shields.io/github/v/release/cangerx/clawpanel?style=flat-square&color=6366f1" alt="Release">
   </a>
-  <a href="https://github.com/qingchencloud/clawpanel/releases/latest">
-    <img src="https://img.shields.io/github/downloads/qingchencloud/clawpanel/total?style=flat-square&color=8b5cf6" alt="Downloads">
+  <a href="https://github.com/cangerx/clawpanel/releases/latest">
+    <img src="https://img.shields.io/github/downloads/cangerx/clawpanel/total?style=flat-square&color=8b5cf6" alt="Downloads">
   </a>
-  <a href="https://github.com/qingchencloud/clawpanel/blob/main/LICENSE">
+  <a href="https://github.com/cangerx/clawpanel/blob/main/LICENSE">
     <img src="https://img.shields.io/badge/license-AGPL--3.0-blue.svg?style=flat-square" alt="License">
   </a>
-  <a href="https://github.com/qingchencloud/clawpanel/actions/workflows/ci.yml">
-    <img src="https://img.shields.io/github/actions/workflow/status/qingchencloud/clawpanel/ci.yml?style=flat-square&label=CI" alt="CI">
+  <a href="https://github.com/cangerx/clawpanel/actions/workflows/ci.yml">
+    <img src="https://img.shields.io/github/actions/workflow/status/cangerx/clawpanel/ci.yml?style=flat-square&label=CI" alt="CI">
   </a>
 </p>
 
@@ -33,7 +33,7 @@
 
 ClawPanel is a visual management panel for the [OpenClaw](https://openclaw.ai) AI Agent framework. It features a **built-in intelligent AI assistant** that helps you install OpenClaw with one click, auto-diagnose configurations, troubleshoot issues, and fix errors. 8 tools + 4 modes + interactive Q&A — easy to manage for beginners and experts alike.
 
-> 🌐 **Website**: [claw.qt.cool](https://claw.qt.cool/) | 📦 **Download**: [GitHub Releases](https://github.com/qingchencloud/clawpanel/releases/latest)
+> 🌐 **Website**: [claw.qt.cool](https://claw.qt.cool/) | 📦 **Download**: [GitHub Releases](https://github.com/cangerx/clawpanel/releases/latest)
 
 ## Features
 
@@ -88,7 +88,7 @@ ClawPanel is a visual management panel for the [OpenClaw](https://openclaw.ai) A
 
 ### Desktop App (Windows / macOS / Linux)
 
-Download the latest installer from [GitHub Releases](https://github.com/qingchencloud/clawpanel/releases/latest):
+Download the latest installer from [GitHub Releases](https://github.com/cangerx/clawpanel/releases/latest):
 
 | Platform | Download |
 |----------|----------|
@@ -102,7 +102,7 @@ Download the latest installer from [GitHub Releases](https://github.com/qingchen
 For headless servers, Raspberry Pi, ARM boards, or Docker:
 
 ```bash
-git clone https://github.com/qingchencloud/clawpanel.git
+git clone https://github.com/cangerx/clawpanel.git
 cd clawpanel
 npm install
 npm run serve
@@ -141,7 +141,7 @@ ClawPanel provides a **pure Web deployment mode** (zero GUI dependency), nativel
 # Prerequisites: Node.js 22+, Rust toolchain, Tauri CLI
 
 # Clone
-git clone https://github.com/qingchencloud/clawpanel.git
+git clone https://github.com/cangerx/clawpanel.git
 cd clawpanel
 
 # Install dependencies
@@ -168,14 +168,14 @@ Thanks to these developers for submitting Pull Requests and contributing directl
 
 <table>
   <tr>
-    <td align="center"><a href="https://github.com/liucong2013"><img src="https://github.com/liucong2013.png?size=80" width="60" height="60"><br><sub><b>liucong2013</b></sub></a><br><a href="https://github.com/qingchencloud/clawpanel/pull/88">#88</a></td>
-    <td align="center"><a href="https://github.com/axdlee"><img src="https://github.com/axdlee.png?size=80" width="60" height="60"><br><sub><b>axdlee</b></sub></a><br><a href="https://github.com/qingchencloud/clawpanel/pull/58">#58</a></td>
-    <td align="center"><a href="https://github.com/ATGCS"><img src="https://github.com/ATGCS.png?size=80" width="60" height="60"><br><sub><b>ATGCS</b></sub></a><br><a href="https://github.com/qingchencloud/clawpanel/pull/107">#107</a></td>
-    <td align="center"><a href="https://github.com/livisun"><img src="https://github.com/livisun.png?size=80" width="60" height="60"><br><sub><b>livisun</b></sub></a><br><a href="https://github.com/qingchencloud/clawpanel/pull/106">#106</a></td>
-    <td align="center"><a href="https://github.com/kiss-kedaya"><img src="https://github.com/kiss-kedaya.png?size=80" width="60" height="60"><br><sub><b>kiss-kedaya</b></sub></a><br><a href="https://github.com/qingchencloud/clawpanel/pull/101">#101</a> <a href="https://github.com/qingchencloud/clawpanel/pull/94">#94</a></td>
-    <td align="center"><a href="https://github.com/wzh4869"><img src="https://github.com/wzh4869.png?size=80" width="60" height="60"><br><sub><b>wzh4869</b></sub></a><br><a href="https://github.com/qingchencloud/clawpanel/pull/82">#82</a></td>
-    <td align="center"><a href="https://github.com/0xsline"><img src="https://github.com/0xsline.png?size=80" width="60" height="60"><br><sub><b>0xsline</b></sub></a><br><a href="https://github.com/qingchencloud/clawpanel/pull/15">#15</a></td>
-    <td align="center"><a href="https://github.com/jonntd"><img src="https://github.com/jonntd.png?size=80" width="60" height="60"><br><sub><b>jonntd</b></sub></a><br><a href="https://github.com/qingchencloud/clawpanel/pull/18">#18</a></td>
+    <td align="center"><a href="https://github.com/liucong2013"><img src="https://github.com/liucong2013.png?size=80" width="60" height="60"><br><sub><b>liucong2013</b></sub></a><br><a href="https://github.com/cangerx/clawpanel/pull/88">#88</a></td>
+    <td align="center"><a href="https://github.com/axdlee"><img src="https://github.com/axdlee.png?size=80" width="60" height="60"><br><sub><b>axdlee</b></sub></a><br><a href="https://github.com/cangerx/clawpanel/pull/58">#58</a></td>
+    <td align="center"><a href="https://github.com/ATGCS"><img src="https://github.com/ATGCS.png?size=80" width="60" height="60"><br><sub><b>ATGCS</b></sub></a><br><a href="https://github.com/cangerx/clawpanel/pull/107">#107</a></td>
+    <td align="center"><a href="https://github.com/livisun"><img src="https://github.com/livisun.png?size=80" width="60" height="60"><br><sub><b>livisun</b></sub></a><br><a href="https://github.com/cangerx/clawpanel/pull/106">#106</a></td>
+    <td align="center"><a href="https://github.com/kiss-kedaya"><img src="https://github.com/kiss-kedaya.png?size=80" width="60" height="60"><br><sub><b>kiss-kedaya</b></sub></a><br><a href="https://github.com/cangerx/clawpanel/pull/101">#101</a> <a href="https://github.com/cangerx/clawpanel/pull/94">#94</a></td>
+    <td align="center"><a href="https://github.com/wzh4869"><img src="https://github.com/wzh4869.png?size=80" width="60" height="60"><br><sub><b>wzh4869</b></sub></a><br><a href="https://github.com/cangerx/clawpanel/pull/82">#82</a></td>
+    <td align="center"><a href="https://github.com/0xsline"><img src="https://github.com/0xsline.png?size=80" width="60" height="60"><br><sub><b>0xsline</b></sub></a><br><a href="https://github.com/cangerx/clawpanel/pull/15">#15</a></td>
+    <td align="center"><a href="https://github.com/jonntd"><img src="https://github.com/jonntd.png?size=80" width="60" height="60"><br><sub><b>jonntd</b></sub></a><br><a href="https://github.com/cangerx/clawpanel/pull/18">#18</a></td>
   </tr>
 </table>
 
@@ -253,7 +253,7 @@ Thanks to community members who opened issues, reported bugs, and suggested feat
 <a href="https://github.com/qingdeng888"><img src="https://github.com/qingdeng888.png?size=40" width="32" height="32" title="qingdeng888"></a>
 <a href="https://github.com/18574707971"><img src="https://github.com/18574707971.png?size=40" width="32" height="32" title="18574707971"></a>
 
-> If we missed your contribution, please [open an issue](https://github.com/qingchencloud/clawpanel/issues/new) and we will add it promptly.
+> If we missed your contribution, please [open an issue](https://github.com/cangerx/clawpanel/issues/new) and we will add it promptly.
 
 ## License
 

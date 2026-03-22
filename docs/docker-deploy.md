@@ -53,7 +53,7 @@ docker run -d \
     apt-get update && apt-get install -y git && \
     npm install -g @qingchencloud/openclaw-zh --registry https://registry.npmmirror.com && \
     openclaw init 2>/dev/null || true && \
-    git clone https://github.com/qingchencloud/clawpanel.git /app && \
+    git clone https://github.com/cangerx/clawpanel.git /app && \
     cd /app && npm install && npm run build && \
     npm run serve"
 ```
@@ -115,7 +115,7 @@ FROM node:22-slim
 RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-RUN git clone https://github.com/qingchencloud/clawpanel.git . && \
+RUN git clone https://github.com/cangerx/clawpanel.git . && \
     npm install
 
 EXPOSE 1420
@@ -148,7 +148,7 @@ RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
 RUN npm install -g @qingchencloud/openclaw-zh --registry https://registry.npmmirror.com
 
 WORKDIR /app
-RUN git clone https://github.com/qingchencloud/clawpanel.git . && \
+RUN git clone https://github.com/cangerx/clawpanel.git . && \
     npm install
 
 EXPOSE 1420
