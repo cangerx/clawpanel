@@ -59,12 +59,26 @@ ClawPanel is a visual management panel for the [OpenClaw](https://openclaw.ai) A
 - **Memory Files** — Manage SOUL.md, IDENTITY.md, AGENTS.md workspace files
 - **Workspace Isolation** — Each agent has its own memory, tools, and configuration
 
-### Messaging Channels
+### Messaging Channels (18 Platforms)
 - **QQ Bot** — Built-in QQ robot integration via QQ Open Platform
 - **Telegram** — Bot Token authentication
 - **Discord** — Bot with guild/channel management
 - **Feishu/Lark** — Enterprise messaging with WebSocket mode
 - **DingTalk** — Enterprise app with Stream mode robot
+- **WeChat** — Official Tencent WeChat OpenClaw plugin, scan QR to connect
+- **WeCom** — WeChat Work (Enterprise WeChat) official plugin
+- **WhatsApp** — WhatsApp Web bridge, built-in support
+- **Slack** — Slack App with Socket Mode
+- **Signal** — Signal CLI / REST API bridge
+- **Google Chat** — Google Workspace Service Account
+- **iMessage (BlueBubbles)** — iMessage via BlueBubbles Server (macOS)
+- **LINE** — LINE Messaging API
+- **Microsoft Teams** — Teams Bot via Bot Framework
+- **Matrix** — Matrix protocol (Element etc.)
+- **Mattermost** — Mattermost team collaboration
+- **IRC** — IRC server channels
+- **Twitch** — Twitch live chat
+- **WebChat** — Built-in web chat UI
 - **Multi-Account** — Bind different accounts to different agents
 
 ### Gateway & Services

@@ -127,7 +127,7 @@ docker run -d --name clawpanel --restart unless-stopped \
 - **服务管理** — OpenClaw 启停控制、版本检测与一键升级、Gateway 安装/卸载、配置备份与还原
 - **模型配置** — 多服务商管理、模型增删改查、批量连通性测试、延迟检测、拖拽排序、自动保存+撤销
 - **网关配置** — 端口、访问权限（本机/局域网）、认证 Token、Tailscale 组网
-- **消息渠道** — 统一管理 Telegram、Discord、飞书、钉钉、QQ 等消息接入，支持同平台多 Agent 绑定
+- **消息渠道（18 平台）** — Telegram、Discord、飞书、钉钉、QQ、微信、企业微信、WhatsApp、Slack、Signal、Google Chat、iMessage (BlueBubbles)、LINE、Teams、Matrix、Mattermost、IRC、Twitch，支持同平台多 Agent 绑定
 - **通信与自动化** — 消息设置、广播策略、斜杠命令、Webhook、执行审批转发等高级配置
 - **使用情况** — Token 用量、API 费用、热门模型/服务商/工具排行、每日用量图表
 - **Agent 管理** — Agent 增删改查、身份编辑、模型配置、工作区管理
@@ -518,13 +518,27 @@ ClawPanel 支持将 AI 接入多种即时通讯平台，在「消息渠道」页
 
 ### 支持的平台
 
-| 平台 | 类型 | 配置难度 | 说明 |
-|------|------|---------|------|
-| 飞书 / Lark | 企业内部应用 | ⭐⭐ | 支持内置插件和官方插件两种模式 |
-| 钉钉 | 企业内部应用 | ⭐⭐ | Stream 模式，需创建机器人应用 |
-| Telegram | Bot | ⭐ | 通过 @BotFather 创建 Bot |
-| Discord | Bot | ⭐⭐ | 需创建 Application + Bot |
-| QQ 机器人 | 官方 Bot | ⭐⭐⭐ | 需在 QQ 开放平台注册 |
+| 平台 | 类型 | 说明 |
+|------|------|------|
+| Telegram | Bot | 通过 @BotFather 创建 Bot |
+| Discord | Bot | 需创建 Application + Bot |
+| 飞书 / Lark | 企业内部应用 | 支持内置插件和官方插件两种模式 |
+| 钉钉 | 企业内部应用 | Stream 模式，需创建机器人应用 |
+| QQ 机器人 | 官方 Bot | 需在 QQ 开放平台注册 |
+| 微信 | 官方插件 | 腾讯微信团队官方 OpenClaw 插件，扫码即用 |
+| 企业微信 (WeCom) | 企业应用 | 企业微信官方插件 |
+| WhatsApp | Web Bridge | WhatsApp Web 桥接，内置支持 |
+| Slack | App | Socket Mode 连接 |
+| Signal | CLI / REST | Signal CLI 或 REST API 桥接 |
+| Google Chat | Workspace | Google Workspace 服务账号 |
+| iMessage (BlueBubbles) | macOS | 通过 BlueBubbles Server 桥接 iMessage |
+| LINE | Messaging API | LINE 官方 Messaging API |
+| Microsoft Teams | Bot Framework | Teams Bot 接入 |
+| Matrix | 开放协议 | Element 等 Matrix 客户端 |
+| Mattermost | 团队协作 | Mattermost 平台接入 |
+| IRC | 传统协议 | IRC 服务器频道 |
+| Twitch | 直播聊天 | Twitch 直播间聊天 |
+| WebChat | 内置 | 内置 Web 聊天界面 |
 
 ### 配置步骤（以飞书为例）
 
