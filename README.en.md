@@ -33,7 +33,7 @@
 
 ClawPanel is a visual management panel for the [OpenClaw](https://openclaw.ai) AI Agent framework. It features a **built-in intelligent AI assistant** that helps you install OpenClaw with one click, auto-diagnose configurations, troubleshoot issues, and fix errors. 8 tools + 4 modes + interactive Q&A — easy to manage for beginners and experts alike.
 
-> 🌐 **Website**: [claw.qt.cool](https://claw.qt.cool/) | 📦 **Download**: [GitHub Releases](https://github.com/cangerx/clawpanel/releases/latest)
+> 📦 **Download**: [GitHub Releases](https://github.com/cangerx/clawpanel/releases/latest)
 
 ## Features
 
@@ -46,11 +46,10 @@ ClawPanel is a visual management panel for the [OpenClaw](https://openclaw.ai) A
 - **8 Built-in Tools** — Terminal execution, file read/write, directory browsing, web search, URL fetching, system info, process management, port checking
 - **4 Modes** — Full auto, semi-auto, read-only, chat-only
 - **Tool Calling** — AI can directly execute commands, read logs, modify configs to diagnose and fix problems
-- **QingchenCloud Integration** — Free partial model access for panel users, premium models at 2-3x discount for paid users
 
 ### Model Configuration
 - **Multi-Provider** — OpenAI, Anthropic, DeepSeek, Google Gemini, Ollama, SiliconFlow, Volcengine, Alibaba Cloud, and more
-- **One-click Model Add** — Browse and select models from QingchenCloud catalog
+- **One-click Model Add** — Browse and select models from provider catalogs
 - **Model Testing** — Test any model with a single click before deploying
 - **Primary/Fallback** — Set primary model with automatic fallback to alternatives
 
@@ -257,6 +256,4 @@ Thanks to community members who opened issues, reported bugs, and suggested feat
 
 ## License
 
-This project is licensed under [AGPL-3.0](LICENSE). For commercial/proprietary use without open-source requirements, contact us for a commercial license.
-
-© 2026 QingchenCloud (武汉晴辰天下网络科技有限公司) | [claw.qt.cool](https://claw.qt.cool)
+This project is licensed under [AGPL-3.0](LICENSE).

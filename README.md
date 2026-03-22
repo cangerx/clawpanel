@@ -31,25 +31,9 @@
   <img src="docs/feature-showcase.gif" width="800" alt="ClawPanel 功能全景">
 </p>
 
-<p align="center">
-  <a href="https://claw.qt.cool/#video">
-    <img src="https://img.shields.io/badge/%E2%96%B6%20%E6%BC%94%E7%A4%BA%E8%A7%86%E9%A2%91-50%E7%A7%92%E5%BF%AB%E9%80%9F%E4%BA%86%E8%A7%A3-6366f1?style=for-the-badge" alt="演示视频">
-  </a>
-</p>
-
 ClawPanel 是 [OpenClaw](https://github.com/1186258278/OpenClawChineseTranslation) AI Agent 框架的可视化管理面板。**内置智能 AI 助手**，帮你一键安装 OpenClaw、自动诊断配置、排查问题、修复错误。8 大工具 + 4 种模式 + 交互式问答，从新手到老手都能轻松管理。
 
-> 🌐 **官网**: [claw.qt.cool](https://claw.qt.cool/)  |  📦 **下载**: [GitHub Releases](https://github.com/cangerx/clawpanel/releases/latest)
-
-### ⚡ OpenClaw 独立安装包（零依赖，无需 Node.js/npm）
-
-不想折腾 Node.js 环境？直接下载 [OpenClaw 独立安装包](https://github.com/qingchencloud/openclaw-standalone/releases/latest)，**内置运行时，解压即用**：
-
-- **Windows**: 下载 `.exe` 安装向导，双击即装
-- **macOS / Linux / 树莓派**: `curl -fsSL https://dl.qrj.ai/openclaw/install.sh | bash`
-- **全平台**: [GitHub Releases](https://github.com/qingchencloud/openclaw-standalone/releases/latest)
-
-> ClawPanel 安装 OpenClaw 时会**自动优先使用独立安装包**，无需手动操作。此方案仅供不使用 ClawPanel 的用户独立安装。
+> 📦 **下载**: [GitHub Releases](https://github.com/cangerx/clawpanel/releases/latest)
 
 ### 🔥 开发板 / 嵌入式设备支持
 
@@ -61,43 +45,6 @@ ClawPanel 提供**纯 Web 版部署模式**（零 GUI 依赖），天然兼容 A
 - 无需 Rust / Tauri / 图形界面，**只要有 Node.js 18+ 就能跑**
 
 > 📖 详见 [Armbian 部署指南](docs/armbian-deploy.md) | [Web 版开发说明](#web-开发版无需-rusttauri)
-
-## 社区交流
-
-一群对 AI Agent 充满热情的开发者和玩家，欢迎加入交流。
-
-<table align="center">
-  <tr>
-    <td align="center">
-      <a href="https://qt.cool/c/OpenClaw"><img src="docs/qr-qq.png" width="140" alt="QQ 群二维码"></a><br>
-      <a href="https://qt.cool/c/OpenClaw"><strong>QQ 群</strong></a>
-    </td>
-    <td align="center">
-      <a href="https://qt.cool/c/OpenClawWx"><img src="docs/qr-wechat.png" width="140" alt="微信群二维码"></a><br>
-      <a href="https://qt.cool/c/OpenClawWx"><strong>微信群</strong></a>
-    </td>
-    <td align="center">
-      <a href="https://qt.cool/c/OpenClawDY"><img src="docs/qr-dy.png" width="140" alt="抖音群二维码"></a><br>
-      <a href="https://qt.cool/c/OpenClawDY"><strong>抖音群</strong></a>
-    </td>
-    <td align="center">
-      <a href="https://qt.cool/c/feishu"><img src="https://qt.cool/c/feishu/qr.png" width="140" alt="飞书群二维码"></a><br>
-      <a href="https://qt.cool/c/feishu"><strong>飞书群</strong></a>
-    </td>
-  </tr>
-</table>
-
-<p align="center">
-  <a href="https://discord.gg/U9AttmsNHh"><strong>Discord</strong></a>
-  &nbsp;·&nbsp;
-  <a href="https://yb.tencent.com/gp/i/LsvIw7mdR7Lb"><strong>元宝派</strong></a>
-  &nbsp;·&nbsp;
-  <a href="https://github.com/cangerx/clawpanel/discussions"><strong>Discussions</strong></a>
-  &nbsp;·&nbsp;
-  <a href="https://github.com/cangerx/clawpanel/issues/new"><strong>反馈 Issue</strong></a>
-  &nbsp;·&nbsp;
-  <a href="https://qt.cool/c/feishu"><strong>飞书群</strong></a>
-</p>
 
 ## 下载安装
 
@@ -188,7 +135,6 @@ docker run -d --name clawpanel --restart unless-stopped \
 - **定时任务** — Cron 定时执行，支持多渠道投递
 - **日志查看** — 多日志源实时查看与关键词搜索
 - **记忆管理** — 记忆文件查看/编辑、分类管理、ZIP 导出、Agent 切换
-- **晴辰云 AI 接口** — 官方 AI 服务，签到送额度、充值最低 3 折消耗、未消耗包退
 - **扩展工具** — cftunnel 内网穿透管理、ClawApp 状态监控
 - **关于** — 版本信息、社群入口、相关项目链接、一键升级
 
@@ -211,7 +157,7 @@ docker run -d --name clawpanel --restart unless-stopped \
 <p align="center">
   <img src="docs/02.png" width="800" alt="AI 助手设置 — 公益 AI 接口">
 </p>
-<p align="center"><em>⚙️ AI 设置 — 独立模型配置 + 公益 AI 接口一键接入，GPT-5 全系列免费可用</em></p>
+<p align="center"><em>⚙️ AI 设置 — 独立模型配置，多服务商接入</em></p>
 
 <p align="center">
   <img src="docs/05.png" width="800" alt="AI 助手人设 — Agent 灵魂">
@@ -226,7 +172,7 @@ docker run -d --name clawpanel --restart unless-stopped \
 <p align="center">
   <img src="docs/09.png" width="800" alt="模型配置">
 </p>
-<p align="center"><em>模型配置 — 多服务商统一管理，公益接口一键添加全部模型，主模型+备选自动切换</em></p>
+<p align="center"><em>模型配置 — 多服务商统一管理，主模型+备选自动切换</em></p>
 
 <p align="center">
   <img src="docs/13.png" width="800" alt="记忆文件">
@@ -713,24 +659,6 @@ sudo systemctl restart clawpanel  # 或 pm2 restart clawpanel
 | [ClawApp](https://github.com/qingchencloud/clawapp) | 跨平台移动聊天客户端 |
 | [cftunnel](https://github.com/qingchencloud/cftunnel) | Cloudflare Tunnel 内网穿透工具 |
 
-## 赞助商
-
-感谢以下赞助商对 ClawPanel 项目的支持：
-
-<table align="center">
-  <tr>
-    <td align="center">
-      <a href="https://www.ciyundata.com/cart/goods.htm?id=267" target="_blank">
-        <img src="https://img.shields.io/badge/慈云数据-香港直连2H2G_99元/年-FF6B35?style=for-the-badge&logo=icloud&logoColor=white" alt="慈云数据">
-      </a>
-      <br><br>
-      <sub>慈云数据服务团队于 2020 年成立，专注于基础云计算、游戏云、主题站长等业务</sub>
-      <br>
-      <sub>售前售后服务 24 小时在线值班，强力保证为客户提供优质稳定的网络资源与机房服务</sub>
-    </td>
-  </tr>
-</table>
-
 ## 贡献
 
 欢迎提交 Issue 和 Pull Request。贡献流程详见 [CONTRIBUTING.md](CONTRIBUTING.md)。
@@ -834,6 +762,4 @@ ClawPanel 的成长离不开每一位贡献者的付出。感谢你们让这个�
 
 ## 许可证
 
-本项目采用 [AGPL-3.0](LICENSE) 开源协议。企业如需闭源商用，可联系获取商业授权。
-
-© 2026 武汉晴辰天下网络科技有限公司 | [claw.qt.cool](https://claw.qt.cool)
+本项目采用 [AGPL-3.0](LICENSE) 开源协议。
