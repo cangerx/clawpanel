@@ -115,9 +115,43 @@ function getPlatformConfigKey(pid) {
 function normalizeWechatAccountId(value) {
   return String(value || '')
     .trim()
-    .replace(/[^a-zA-Z0-9._-]+/g, '-')
+    .replace(/[^a-zA-Z0-9_-]+/g, '-')
     .replace(/-+/g, '-')
     .replace(/^-|-$/g, '')
+}
+
+function migrateWechatAccountStorage() {
+  const normalizedEntries = new Map()
+  const touchedPaths = []
+
+  if (fs.existsSync(WECHAT_NATIVE_ACCOUNTS_DIR)) {
+    for (const name of fs.readdirSync(WECHAT_NATIVE_ACCOUNTS_DIR)) {
+      if (!name.endsWith('.json')) continue
+      const oldId = name.replace(/\.json$/i, '').trim()
+      if (!oldId) continue
+      const normalizedId = normalizeWechatAccountId(oldId)
+      if (!normalizedId) continue
+      const oldPath = path.join(WECHAT_NATIVE_ACCOUNTS_DIR, name)
+      const targetPath = path.join(WECHAT_NATIVE_ACCOUNTS_DIR, `${normalizedId}.json`)
+      normalizedEntries.set(normalizedId, true)
+      if (oldPath === targetPath || fs.existsSync(targetPath)) continue
+      fs.renameSync(oldPath, targetPath)
+      touchedPaths.push(targetPath)
+    }
+  }
+
+  const rawIndex = Array.isArray(readJsonFileSafe(WECHAT_NATIVE_ACCOUNTS_INDEX_PATH, []))
+    ? readJsonFileSafe(WECHAT_NATIVE_ACCOUNTS_INDEX_PATH, []).map(v => String(v || '').trim()).filter(Boolean)
+    : []
+  const normalizedIndex = [...new Set(rawIndex.map(normalizeWechatAccountId).filter(Boolean))]
+  if (normalizedIndex.length || rawIndex.length) {
+    fs.mkdirSync(path.dirname(WECHAT_NATIVE_ACCOUNTS_INDEX_PATH), { recursive: true })
+    fs.writeFileSync(WECHAT_NATIVE_ACCOUNTS_INDEX_PATH, JSON.stringify(normalizedIndex, null, 2))
+    touchedPaths.push(WECHAT_NATIVE_ACCOUNTS_INDEX_PATH)
+    normalizedIndex.forEach(id => normalizedEntries.set(id, true))
+  }
+
+  return { normalizedIds: [...normalizedEntries.keys()], touchedPaths }
 }
 
 function resolvePluginDir(pluginId) {
@@ -186,6 +220,7 @@ function resolveSafeLocalImage(filePath) {
 }
 
 function getWechatRuntimeStatus() {
+  migrateWechatAccountStorage()
   const cfg = fs.existsSync(CONFIG_PATH) ? readJsonFileSafe(CONFIG_PATH, {}) : {}
   const configuredInOpenclaw = !!cfg?.channels?.[WECHAT_NATIVE_CONFIG_KEY]
   const pluginDir = resolvePluginDir(WECHAT_NATIVE_PLUGIN_ID)
