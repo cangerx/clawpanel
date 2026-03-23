@@ -433,7 +433,7 @@ async function checkHotUpdate(cards, panelVersion) {
         <span style="color:var(--accent)">新版本: v${ver}</span>
         ${changelog ? `<span style="color:var(--text-tertiary);font-size:var(--font-size-xs)">${changelog}</span>` : ''}
         <button class="btn btn-primary btn-sm" id="btn-hot-download" style="padding:2px 8px;font-size:var(--font-size-xs)">热更新</button>
-        <a class="btn btn-secondary btn-sm" href="https://github.com/qingchencloud/clawpanel/releases" target="_blank" rel="noopener" style="padding:2px 8px;font-size:var(--font-size-xs)">完整安装包</a>
+        <a class="btn btn-secondary btn-sm" href="https://github.com/cangerx/clawpanel/releases" target="_blank" rel="noopener" style="padding:2px 8px;font-size:var(--font-size-xs)">完整安装包</a>
       `
       meta.querySelector('#btn-hot-download')?.addEventListener('click', async () => {
         const btn = meta.querySelector('#btn-hot-download')

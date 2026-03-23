@@ -8,8 +8,7 @@ echo "=========================================="
 echo ""
 
 PANEL_PORT=1420
-REPO_URL="https://github.com/qingchencloud/clawpanel.git"
-REPO_URL_GITEE="https://gitee.com/QtCodeCreators/clawpanel.git"
+REPO_URL="https://github.com/cangerx/clawpanel.git"
 NPM_REGISTRY="https://registry.npmmirror.com"
 
 # 检测权限模式
@@ -162,10 +161,7 @@ install_clawpanel() {
     else
         echo "📦 克隆 ClawPanel..."
         mkdir -p "$INSTALL_DIR"
-        if ! git clone "$REPO_URL" "$INSTALL_DIR" 2>/dev/null; then
-            echo "⚠️  GitHub 克隆失败，切换到 Gitee 国内镜像..."
-            git clone "$REPO_URL_GITEE" "$INSTALL_DIR"
-        fi
+        git clone "$REPO_URL" "$INSTALL_DIR"
         cd "$INSTALL_DIR"
         npm install --registry "$NPM_REGISTRY"
     fi

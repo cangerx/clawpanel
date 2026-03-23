@@ -91,11 +91,13 @@ ClawPanel 提供**纯 Web 版部署模式**（零 GUI 依赖），天然兼容 A
 
 ### Linux 服务器（Web 版）
 
-没有桌面环境？一键部署 ClawPanel Web 版，通过浏览器远程管理 OpenClaw：
+没有桌面环境？一键安装或更新 ClawPanel Web 版，通过浏览器远程管理 OpenClaw：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/cangerx/clawpanel/main/scripts/linux-deploy.sh | bash
+curl -fsSL https://raw.githubusercontent.com/cangerx/clawpanel/main/deploy.sh | bash
 ```
+
+默认安装到 `~/.clawpanel-web`，默认监听 `1420` 端口；再次执行同一命令会拉取并安装最新主线版本。
 
 部署完成后访问 `http://服务器IP:1420`，功能与桌面版一致。
 
@@ -459,8 +461,10 @@ Web 版适用于 Linux 服务器（无桌面环境），通过浏览器远程管
 ### 一键部署
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/cangerx/clawpanel/main/scripts/linux-deploy.sh | bash
+curl -fsSL https://raw.githubusercontent.com/cangerx/clawpanel/main/deploy.sh | bash
 ```
+
+默认安装到 `~/.clawpanel-web`，默认监听 `1420` 端口；重复执行同一命令即可更新到最新主线版本。
 
 部署完成后访问 `http://服务器IP:1420`。
 

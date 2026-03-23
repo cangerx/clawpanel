@@ -5,6 +5,19 @@
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.0.0] - 2026-03-23
+
+### 新功能 (Features)
+
+- **消息渠道插件卸载** — 渠道页现已支持对非内置消息渠道插件执行卸载，并同步清理对应插件配置、平台配置和微信运行态残留
+- **前后端卸载链路补齐** — Web dev-api、Tauri 命令注册、前端 API 封装全部接通，消息渠道插件卸载在桌面版与 Web 版行为一致
+
+### 改进 (Improvements)
+
+- **仓库入口统一** — README、安装引导、更新入口、助手文案统一切换到 `cangerx/clawpanel` 新仓库地址
+- **一键脚本升级** — `deploy.sh` 现支持安装或更新最新主线版本，默认监听 `1420`，并统一使用 `npm run build` / `npm run serve`
+- **版本提升到 1.0.0** — 项目版本、Tauri 配置、Cargo 版本与官网展示同步升级到 1.0.0
+
 ## [0.9.7] - 2026-03-21
 
 ### 新功能 (Features)
@@ -117,7 +130,6 @@
 - **消息渠道配置被仪表盘覆盖** — 仪表盘自愈逻辑用缓存 config 覆盖文件导致 channels 丢失，现在先读取最新配置再 patch
 
 ### 改进 (Improvements)
-
 - **ARM 设备性能优化** — in-flight 请求去重防止进程堆积、后端 serverCached 缓存、Gateway 轮询降频（15s→30s）、get_status_summary 改为直接读文件不走 CLI
 - **R2 CDN 安装加速** — 新增 Cloudflare R2 预装归档下载（dl.qrj.ai），Windows 安装从 3-10 分钟降至 1-2 分钟
 - **模型添加体验优化** — 快捷添加改为模型选择弹窗，用户可自主勾选需要的模型

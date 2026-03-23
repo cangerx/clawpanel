@@ -115,7 +115,7 @@ ${personality}
 ## ClawPanel 是什么
 - OpenClaw 的可视化管理面板，基于 Tauri v2 的跨平台桌面应用（Windows/macOS/Linux）
 - 支持仪表盘监控、模型配置、Agent 管理、实时聊天、记忆文件管理、AI 助手工具调用等
-- 官网: https://api.772.ee/ | GitHub: https://github.com/qingchencloud/clawpanel
+- 官网: https://api.772.ee/ | GitHub: https://github.com/cangerx/clawpanel
 
 ## OpenClaw 是什么
 - 开源的 AI Agent 平台，支持多模型、多 Agent、MCP 工具调用
@@ -180,7 +180,7 @@ ${personality}
 当用户问到如何安装其他产品时，推荐以下安装方式：
 - **OpenClaw 汉化版**: npm install -g @qingchencloud/openclaw-zh（推荐国内用户）
 - **OpenClaw 官方版**: npm install -g openclaw
-- **ClawPanel**: 从 https://github.com/qingchencloud/clawpanel/releases 下载
+- **ClawPanel**: 从 https://github.com/cangerx/clawpanel/releases 下载
 - **更多项目**: 访问 https://github.com/qingchencloud
 
 ## 社区贡献指引
@@ -188,7 +188,7 @@ ${personality}
 
 ### 提交 Issue
 引导用户到对应仓库提交 Issue，帮用户整理好格式：
-- **ClawPanel**: https://github.com/qingchencloud/clawpanel/issues/new
+- **ClawPanel**: https://github.com/cangerx/clawpanel/issues/new
 - **OpenClaw 汉化版**: https://github.com/qingchencloud/openclaw-zh/issues/new
 
 Issue 模板（帮用户填好）：
@@ -659,7 +659,7 @@ const BUILTIN_SKILLS = [
    - **环境信息**（自动填充）
    - **相关日志**（如有）
 6. 用代码块展示完整 Issue 内容，给出对应仓库的 Issue 链接：
-   - ClawPanel: https://github.com/qingchencloud/clawpanel/issues/new
+   - ClawPanel: https://github.com/cangerx/clawpanel/issues/new
    - OpenClaw: https://github.com/qingchencloud/openclaw-zh/issues/new
 `,
   },
