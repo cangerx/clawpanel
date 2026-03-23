@@ -60,7 +60,7 @@ fn ensure_plugin_allowed(cfg: &mut Value, plugin_id: &str) -> Result<(), String>
         .as_object_mut()
         .ok_or("plugins.entries 节点格式错误")?;
     let entry = entries_obj
-        .entry(plugin_id.into())
+        .entry(plugin_id.to_string())
         .or_insert_with(|| json!({}));
     let entry_obj = entry
         .as_object_mut()
