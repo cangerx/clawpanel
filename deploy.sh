@@ -14,6 +14,8 @@ INSTALLER_VERSION="v3"
 PROMO_URL="https://api.772.ee"
 PROMO_TITLE="api.772.ee 大模型中转"
 PROMO_DESC="多模型聚合 / OpenAI 兼容 / 更省心的 API 接入"
+PROMO_HIGHLIGHT="Claude / OpenAI / Gemini / DeepSeek 一站式中转"
+PROMO_CTA="立即接入: https://api.772.ee"
 
 if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
   C_RESET='\033[0m'
@@ -61,11 +63,12 @@ print_banner() {
 }
 
 print_promo() {
-  printf "%b┌─ Sponsor ────────────────────────────────────────────────────┐%b\n" "$C_PINK" "$C_RESET"
-  printf "%b│%b %-60s %b│%b\n" "$C_PINK" "$C_RESET" "${C_BOLD}${PROMO_TITLE}${C_RESET}" "$C_PINK" "$C_RESET"
-  printf "%b│%b %-78s%b│%b\n" "$C_PINK" "$C_RESET" "$PROMO_DESC" "$C_PINK" "$C_RESET"
-  printf "%b│%b %-78s%b│%b\n" "$C_PINK" "$C_RESET" "$PROMO_URL" "$C_PINK" "$C_RESET"
-  printf "%b└──────────────────────────────────────────────────────────────┘%b\n" "$C_PINK" "$C_RESET"
+  printf "%b╔══════════════════════════════════════════════════════════════╗%b\n" "$C_PINK$C_BOLD" "$C_RESET"
+  printf "%b║%b %-60s %b║%b\n" "$C_PINK" "$C_RESET" "${C_BOLD}SPONSOR · ${PROMO_TITLE}${C_RESET}" "$C_PINK" "$C_RESET"
+  printf "%b║%b %-78s%b║%b\n" "$C_PINK" "$C_RESET" "$PROMO_HIGHLIGHT" "$C_PINK" "$C_RESET"
+  printf "%b║%b %-78s%b║%b\n" "$C_PINK" "$C_RESET" "$PROMO_DESC" "$C_PINK" "$C_RESET"
+  printf "%b║%b %-78s%b║%b\n" "$C_PINK" "$C_RESET" "${C_BOLD}${PROMO_CTA}${C_RESET}" "$C_PINK" "$C_RESET"
+  printf "%b╚══════════════════════════════════════════════════════════════╝%b\n" "$C_PINK$C_BOLD" "$C_RESET"
   printf "\n"
 }
 
@@ -90,9 +93,165 @@ log_error() {
   printf "  %b✘%b %s\n" "$C_RED" "$C_RESET" "$1" >&2
 }
 
+clear_line() {
+  printf '\r\033[2K'
+}
+
+file_size() {
+  local path="$1"
+  if [ ! -f "$path" ]; then
+    printf '0'
+    return
+  fi
+
+  stat -f%z "$path" 2>/dev/null || stat -c%s "$path" 2>/dev/null || printf '0'
+}
+
+format_bytes() {
+  local bytes="${1:-0}"
+  if [ "$bytes" -ge 1073741824 ]; then
+    printf '%dGB' $((bytes / 1073741824))
+  elif [ "$bytes" -ge 1048576 ]; then
+    printf '%dMB' $((bytes / 1048576))
+  elif [ "$bytes" -ge 1024 ]; then
+    printf '%dKB' $((bytes / 1024))
+  else
+    printf '%dB' "$bytes"
+  fi
+}
+
+probe_content_length() {
+  local url="$1"
+  local content_length=''
+
+  if require_cmd curl; then
+    content_length=$(curl --fail --location --silent --show-error --head \
+      --connect-timeout 15 --max-time 30 "$url" 2>/dev/null | \
+      awk 'tolower($1) == "content-length:" { gsub("\r", "", $2); value=$2 } END { print value }') || true
+  elif require_cmd wget; then
+    content_length=$(wget --server-response --spider "$url" 2>&1 | \
+      awk 'tolower($1) == "content-length:" { gsub("\r", "", $2); value=$2 } END { print value }') || true
+  fi
+
+  case "$content_length" in
+    ''|*[!0-9]*) printf '0' ;;
+    *) printf '%s' "$content_length" ;;
+  esac
+}
+
+download_with_live_progress() {
+  local url="$1"
+  local output="$2"
+  local total_bytes downloaded previous downloaded_text total_text speed_bytes speed_text percent elapsed status
+  local start_time pid
+
+  total_bytes=$(probe_content_length "$url")
+  start_time=$(date +%s)
+
+  if require_cmd curl; then
+    curl --fail --location --silent --show-error \
+      --connect-timeout 15 --max-time "$DOWNLOAD_TIMEOUT" \
+      --retry 2 --retry-delay 2 \
+      -o "$output" "$url" &
+  elif require_cmd wget; then
+    wget --tries=3 --timeout=15 -q -O "$output" "$url" &
+  else
+    return 1
+  fi
+
+  pid=$!
+  previous=0
+
+  while kill -0 "$pid" 2>/dev/null; do
+    downloaded=$(file_size "$output")
+    elapsed=$(( $(date +%s) - start_time ))
+    if [ "$elapsed" -lt 1 ]; then
+      elapsed=1
+    fi
+
+    speed_bytes=$(( downloaded / elapsed ))
+    downloaded_text=$(format_bytes "$downloaded")
+    speed_text=$(format_bytes "$speed_bytes")
+
+    if [ "$total_bytes" -gt 0 ]; then
+      percent=$(( downloaded * 100 / total_bytes ))
+      if [ "$percent" -gt 100 ]; then
+        percent=100
+      fi
+      total_text=$(format_bytes "$total_bytes")
+      printf "\r  %b↓%b 下载中 %3d%%  %s / %s  %s/s" "$C_CYAN" "$C_RESET" "$percent" "$downloaded_text" "$total_text" "$speed_text"
+    else
+      printf "\r  %b↓%b 下载中      %s  %s/s" "$C_CYAN" "$C_RESET" "$downloaded_text" "$speed_text"
+    fi
+
+    previous=$downloaded
+    sleep 0.2
+  done
+
+  wait "$pid"
+  status=$?
+  clear_line
+
+  if [ "$status" -eq 0 ]; then
+    downloaded=$(file_size "$output")
+    downloaded_text=$(format_bytes "$downloaded")
+    if [ "$total_bytes" -gt 0 ]; then
+      total_text=$(format_bytes "$total_bytes")
+      log_ok "源码下载完成 (${downloaded_text} / ${total_text})"
+    else
+      log_ok "源码下载完成 (${downloaded_text})"
+    fi
+  fi
+
+  return "$status"
+}
+run_with_spinner() {
+  local label="$1"
+  shift
+
+  if [ ! -t 1 ]; then
+    "$@"
+    return
+  fi
+
+  local log_file pid status i
+  local frames=("⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏")
+  log_file=$(mktemp /tmp/clawpanel-task-XXXXXX.log)
+
+  "$@" >"$log_file" 2>&1 &
+  pid=$!
+  i=0
+
+  while kill -0 "$pid" 2>/dev/null; do
+    printf "\r  %b%s%b %s" "$C_CYAN" "${frames[$i]}" "$C_RESET" "$label"
+    i=$(((i + 1) % ${#frames[@]}))
+    sleep 0.1
+  done
+
+  wait "$pid"
+  status=$?
+  clear_line
+
+  if [ "$status" -eq 0 ]; then
+    log_ok "$label"
+  else
+    log_error "$label"
+    if [ -s "$log_file" ]; then
+      printf "%b──────────────── 任务输出 ────────────────%b\n" "$C_RED" "$C_RESET" >&2
+      cat "$log_file" >&2
+      printf "%b──────────────────────────────────────────%b\n" "$C_RED" "$C_RESET" >&2
+    fi
+    rm -f "$log_file"
+    return "$status"
+  fi
+
+  rm -f "$log_file"
+}
+
 require_cmd() {
   command -v "$1" >/dev/null 2>&1
 }
+
 
 detect_ip() {
   local ip=""
@@ -128,23 +287,21 @@ download_archive() {
   local url="$1"
   local output="$2"
 
+  if [ -t 1 ]; then
+    download_with_live_progress "$url" "$output"
+    return
+  fi
+
   if require_cmd curl; then
-    if [ -t 1 ]; then
-      curl --fail --location --progress-bar \
-        --connect-timeout 15 --max-time "$DOWNLOAD_TIMEOUT" \
-        --retry 2 --retry-delay 2 \
-        -o "$output" "$url"
-    else
-      curl --fail --location --silent --show-error \
-        --connect-timeout 15 --max-time "$DOWNLOAD_TIMEOUT" \
-        --retry 2 --retry-delay 2 \
-        -o "$output" "$url"
-    fi
+    curl --fail --location --silent --show-error \
+      --connect-timeout 15 --max-time "$DOWNLOAD_TIMEOUT" \
+      --retry 2 --retry-delay 2 \
+      -o "$output" "$url"
     return
   fi
 
   if require_cmd wget; then
-    wget --tries=3 --timeout=15 --progress=bar:force:noscroll -O "$output" "$url"
+    wget --tries=3 --timeout=15 -q -O "$output" "$url"
     return
   fi
 
@@ -197,10 +354,10 @@ install_source() {
 install_deps() {
   if [ -f package-lock.json ]; then
     log_info "检测到 package-lock.json，使用 npm ci"
-    npm ci
+    run_with_spinner "安装 npm 依赖中" npm ci
   else
     log_info "未检测到 package-lock.json，使用 npm install"
-    npm install
+    run_with_spinner "安装 npm 依赖中" npm install
   fi
 }
 
@@ -225,8 +382,8 @@ print_done() {
   print_promo
 }
 
-print_banner
 print_promo
+print_banner
 
 log_step "检查运行环境"
 require_cmd node || { log_error "需要 Node.js，请先安装: https://nodejs.org/"; exit 1; }
@@ -250,7 +407,7 @@ cd "$INSTALL_DIR"
 install_deps
 
 log_step "构建前端"
-npm run build
+run_with_spinner "构建前端产物中" npm run build
 log_ok "前端构建完成"
 
 print_done
