@@ -219,6 +219,10 @@ export const api = {
   readPlatformConfig: (platform) => invoke('read_platform_config', { platform }),
   saveMessagingPlatform: (platform, form, accountId) => { invalidate('list_configured_platforms', 'read_platform_config', 'get_channel_runtime_status'); return invoke('save_messaging_platform', { platform, form, accountId: accountId || null }) },
   removeMessagingPlatform: (platform) => { invalidate('list_configured_platforms', 'read_platform_config', 'get_channel_runtime_status'); return invoke('remove_messaging_platform', { platform }) },
+  uninstallChannelPlugin: (pluginId, platform) => {
+    invalidate('list_configured_platforms', 'read_openclaw_config', 'read_platform_config', 'get_channel_runtime_status', 'get_channel_plugin_status')
+    return invoke('uninstall_channel_plugin', { pluginId, platform })
+  },
   toggleMessagingPlatform: (platform, enabled) => { invalidate('list_configured_platforms', 'read_openclaw_config', 'read_platform_config', 'get_channel_runtime_status'); return invoke('toggle_messaging_platform', { platform, enabled }) },
   verifyBotToken: (platform, form) => invoke('verify_bot_token', { platform, form }),
   listConfiguredPlatforms: () => cachedInvoke('list_configured_platforms', {}, 5000),

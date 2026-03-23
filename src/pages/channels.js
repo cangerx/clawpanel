@@ -124,11 +124,11 @@ const PLATFORM_REGISTRY = {
     desc: '腾讯官方原生微信插件，支持扫码登录、文本/图片/文件收发',
     guide: [
       '点击「安装」，ClawPanel 会自动安装腾讯官方微信插件 <code>@tencent-weixin/openclaw-weixin</code>',
-      '安装完成后，使用终端命令 <code>openclaw channels login --channel openclaw-weixin</code> 拉起二维码登录',
-      '使用手机微信扫码绑定，绑定成功后即可通过微信与 AI 对话',
+      '安装完成后，直接在 ClawPanel 弹窗内点击「生成二维码」即可拉起扫码登录，无需再手敲终端命令',
+      '使用手机微信扫码并确认绑定，绑定成功后页面会自动刷新运行态与接入状态',
       '原生插件支持文本、图片、视频、文件消息收发',
     ],
-    guideFooter: '<div style="margin-top:8px;font-size:var(--font-size-xs);color:var(--text-tertiary)">当前使用腾讯官方原生微信插件方案。登录命令：<code>openclaw channels login --channel openclaw-weixin</code></div>',
+    guideFooter: '<div style="margin-top:8px;font-size:var(--font-size-xs);color:var(--text-tertiary)">当前使用腾讯官方原生微信插件方案。面板内可直接扫码绑定；如需备用命令，可使用 <code>openclaw channels login --channel openclaw-weixin</code></div>',
     fields: [],
     pluginRequired: '@tencent-weixin/openclaw-weixin@latest',
     pluginId: 'openclaw-weixin',
@@ -397,13 +397,14 @@ async function loadPlatforms(page, state) {
 
 async function hydratePluginStatuses(page, state, { force = false } = {}) {
   const targets = Object.entries(PLATFORM_REGISTRY).filter(([, reg]) => reg.pluginRequired)
-  const tasks = targets.map(async ([pid, reg]) => {
+  const tasks = targets.map(async ([pid]) => {
     const cached = _pluginStatusCache.get(pid)
     if (!force && cached && Date.now() - cached.ts < PLUGIN_STATUS_TTL) {
       state.pluginStatus[pid] = cached.value
       return
     }
-    const pluginId = reg.pluginId || pid
+    const pluginMeta = getPlatformPluginMeta(pid)
+    const pluginId = pluginMeta?.pluginId || PLATFORM_REGISTRY[pid]?.pluginId || pid
     try {
       const status = await api.getChannelPluginStatus(pluginId)
       const next = { installed: !!status?.installed, builtin: !!status?.builtin }
@@ -417,7 +418,68 @@ async function hydratePluginStatuses(page, state, { force = false } = {}) {
   })
   await Promise.allSettled(tasks)
   if (!page.isConnected) return
+  renderConfigured(page, state)
   renderAvailable(page, state)
+}
+
+function getPlatformPluginMeta(pid, formScope = document) {
+  const reg = PLATFORM_REGISTRY[pid]
+  if (!reg?.pluginRequired) return null
+
+  let pluginId = reg.pluginId || pid
+  let pluginPackage = reg.pluginRequired
+  let uninstallLabel = reg.label || pid
+
+  if (pid === 'feishu') {
+    const pluginVersionField = formScope?.querySelector?.('[data-name="pluginVersion"]')
+    const pluginVersion = pluginVersionField?.value || localStorage.getItem('clawpanel-feishu-plugin-version') || 'builtin'
+    if (pluginVersionField) localStorage.setItem('clawpanel-feishu-plugin-version', pluginVersion)
+    if (pluginVersion === 'official') {
+      pluginId = 'openclaw-lark'
+      pluginPackage = 'openclaw-lark'
+      uninstallLabel = '飞书官方插件'
+    } else {
+      uninstallLabel = '飞书内置插件'
+    }
+  }
+
+  return { pluginId, pluginPackage, uninstallLabel }
+}
+
+async function handleUninstallPlugin(pid, page, state, btn) {
+  const reg = PLATFORM_REGISTRY[pid]
+  const meta = getPlatformPluginMeta(pid)
+  if (!reg || !meta) return
+
+  const label = meta.uninstallLabel || reg.label || pid
+  const yes = await showConfirm(`确定卸载 ${label}？\n这会删除插件目录，并清理该渠道的插件配置与接入配置。`)
+  if (!yes) return
+
+  const prevHtml = btn?.innerHTML
+  const prevText = btn?.textContent
+  if (btn) {
+    btn.classList.add('btn-loading')
+    btn.disabled = true
+    btn.textContent = '卸载中...'
+  }
+
+  try {
+    await api.uninstallChannelPlugin(meta.pluginId, pid)
+    _pluginStatusCache.delete(pid)
+    state.pluginStatus[pid] = { installed: false, builtin: false }
+    if (pid === 'wechat') state.runtimeStatus.wechat = null
+    toast(`${label} 已卸载`, 'success')
+    await loadPlatforms(page, state)
+  } catch (e) {
+    toast('卸载失败: ' + e, 'error')
+  }
+
+  if (btn) {
+    btn.classList.remove('btn-loading')
+    btn.disabled = false
+    if (prevHtml) btn.innerHTML = prevHtml
+    else btn.textContent = prevText || '卸载插件'
+  }
 }
 
 // ── 已配置平台渲染 ──
@@ -452,6 +514,8 @@ function renderConfigured(page, state) {
           const runtimeOnlyHint = p.runtimeOnly
             ? `<div style="margin-top:4px;font-size:var(--font-size-xs);color:var(--accent)">当前为运行态接入，状态来自腾讯官方原生微信插件</div>`
             : ''
+          const pluginState = state.pluginStatus[p.id]
+          const canUninstallPlugin = !!(reg?.pluginRequired && pluginState && pluginState.installed && !pluginState.builtin)
           return `
             <div class="platform-card ${p.enabled ? 'active' : 'inactive'}" data-pid="${p.id}">
               <div class="platform-card-header">
@@ -465,6 +529,7 @@ function renderConfigured(page, state) {
               <div class="platform-card-actions">
                 <button class="btn btn-sm btn-secondary" data-action="edit">${icon('edit', 14)} 编辑</button>
                 <button class="btn btn-sm btn-secondary" data-action="toggle">${p.enabled ? icon('pause', 14) + ' 禁用' : icon('play', 14) + ' 启用'}</button>
+                ${canUninstallPlugin ? `<button class="btn btn-sm btn-secondary" data-action="uninstall-plugin">${icon('trash', 14)} 卸载插件</button>` : ''}
                 <button class="btn btn-sm btn-danger" data-action="remove">${icon('trash', 14)}</button>
               </div>
             </div>
@@ -489,8 +554,12 @@ function renderConfigured(page, state) {
         btn.innerHTML = prev
       }
     }
+    const uninstallPluginBtn = card.querySelector('[data-action="uninstall-plugin"]')
     const toggleBtn = card.querySelector('[data-action="toggle"]')
     const removeBtn = card.querySelector('[data-action="remove"]')
+    if (uninstallPluginBtn) uninstallPluginBtn.onclick = async () => {
+      await handleUninstallPlugin(pid, page, state, uninstallPluginBtn)
+    }
     if (toggleBtn) toggleBtn.onclick = async () => {
       const cur = state.configured.find(p => p.id === pid)
       if (!cur) return
@@ -1232,12 +1301,10 @@ async function openConfigDialog(pid, page, state) {
     try {
       // 插件检查：如果需要插件但未安装，提示先安装
       if (reg.pluginRequired) {
-        let pluginId = reg.pluginId || pid
-        if (pid === 'feishu') {
-          const pluginVersionField = modal.querySelector('[data-name="pluginVersion"]')
-          const pluginVersion = pluginVersionField?.value || 'builtin'
-          localStorage.setItem('clawpanel-feishu-plugin-version', pluginVersion)
-          if (pluginVersion === 'official') pluginId = 'openclaw-lark'
+        const meta = getPlatformPluginMeta(pid, modal)
+        let pluginId = meta?.pluginId || reg.pluginId || pid
+        if (pid === 'feishu' && meta) {
+          pluginId = meta.pluginId
         }
         const pluginStatus = await api.getChannelPluginStatus(pluginId)
         if (!pluginStatus?.installed && !pluginStatus?.builtin) {

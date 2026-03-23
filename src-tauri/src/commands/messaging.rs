@@ -39,6 +39,40 @@ fn ensure_chat_completions_enabled(cfg: &mut Value) -> Result<(), String> {
     Ok(())
 }
 
+fn ensure_plugin_allowed(cfg: &mut Value, plugin_id: &str) -> Result<(), String> {
+    let plugin_id = plugin_id.trim();
+    if plugin_id.is_empty() {
+        return Err("plugin_id 不能为空".into());
+    }
+
+    let root = cfg.as_object_mut().ok_or("配置格式错误")?;
+    let plugins = root.entry("plugins").or_insert_with(|| json!({}));
+    let plugins_obj = plugins.as_object_mut().ok_or("plugins 节点格式错误")?;
+
+    let allow = plugins_obj.entry("allow").or_insert_with(|| json!([]));
+    let allow_arr = allow.as_array_mut().ok_or("plugins.allow 节点格式错误")?;
+    if !allow_arr.iter().any(|v| v.as_str() == Some(plugin_id)) {
+        allow_arr.push(Value::String(plugin_id.into()));
+    }
+
+    let entries = plugins_obj.entry("entries").or_insert_with(|| json!({}));
+    let entries_obj = entries
+        .as_object_mut()
+        .ok_or("plugins.entries 节点格式错误")?;
+    let entry = entries_obj.entry(plugin_id.into()).or_insert_with(|| json!({}));
+    let entry_obj = entry
+        .as_object_mut()
+        .ok_or("plugins.entries.<plugin_id> 节点格式错误")?;
+    entry_obj.insert("enabled".into(), Value::Bool(true));
+    Ok(())
+}
+
+fn plugin_backup_root() -> PathBuf {
+    super::openclaw_dir()
+        .join("extensions")
+        .join(".clawpanel-backups")
+}
+
 fn gateway_auth_mode(cfg: &Value) -> Option<&str> {
     cfg.get("gateway")
         .and_then(|g| g.get("auth"))
@@ -465,6 +499,50 @@ pub async fn remove_messaging_platform(
     Ok(json!({ "ok": true }))
 }
 
+/// 卸载消息渠道插件，并清理相关配置
+#[tauri::command]
+pub async fn uninstall_channel_plugin(
+    plugin_id: String,
+    platform: String,
+    app: tauri::AppHandle,
+) -> Result<Value, String> {
+    let plugin_id = plugin_id.trim().to_string();
+    let platform = platform.trim().to_string();
+    if plugin_id.is_empty() {
+        return Err("plugin_id 不能为空".into());
+    }
+    if platform.is_empty() {
+        return Err("platform 不能为空".into());
+    }
+
+    let plugin_dir = generic_plugin_dir(&plugin_id);
+    if plugin_dir.exists() && !plugin_install_marker_exists(&plugin_dir) {
+        return Err(format!("插件目录异常，已拒绝删除: {}", plugin_dir.display()));
+    }
+
+    let mut cfg = super::config::load_openclaw_json().unwrap_or_else(|_| json!({}));
+    uninstall_channel_plugin_cleanup(&mut cfg, &plugin_id, &platform)?;
+    super::config::save_openclaw_json(&cfg)?;
+
+    if plugin_dir.exists() {
+        fs::remove_dir_all(&plugin_dir)
+            .map_err(|e| format!("删除插件目录失败 {}: {e}", plugin_dir.display()))?;
+    }
+
+    let _ = cleanup_legacy_plugin_backup_dir(&plugin_id);
+
+    let app2 = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let _ = super::config::do_reload_gateway(&app2).await;
+    });
+
+    Ok(json!({
+        "ok": true,
+        "pluginId": plugin_id,
+        "platform": platform,
+    }))
+}
+
 /// 切换平台启用/禁用
 #[tauri::command]
 pub async fn toggle_messaging_platform(
@@ -719,36 +797,73 @@ async fn verify_qqbot(
     }
 }
 
-fn ensure_plugin_allowed(cfg: &mut Value, plugin_id: &str) -> Result<(), String> {
-    let root = cfg.as_object_mut().ok_or("配置格式错误")?;
-    let plugins = root.entry("plugins").or_insert_with(|| json!({}));
-    let plugins_map = plugins.as_object_mut().ok_or("plugins 节点格式错误")?;
+fn remove_plugin_allow_entry(cfg: &mut Value, plugin_id: &str) -> Result<(), String> {
+    let Some(root) = cfg.as_object_mut() else {
+        return Ok(());
+    };
+    let Some(plugins) = root.get_mut("plugins").and_then(|v| v.as_object_mut()) else {
+        return Ok(());
+    };
 
-    let allow = plugins_map.entry("allow").or_insert_with(|| json!([]));
-    let allow_arr = allow.as_array_mut().ok_or("plugins.allow 节点格式错误")?;
-    if !allow_arr.iter().any(|v| v.as_str() == Some(plugin_id)) {
-        allow_arr.push(Value::String(plugin_id.to_string()));
+    if let Some(allow) = plugins.get_mut("allow").and_then(|v| v.as_array_mut()) {
+        allow.retain(|v| v.as_str() != Some(plugin_id));
+        if allow.is_empty() {
+            plugins.remove("allow");
+        }
     }
 
-    let entries = plugins_map.entry("entries").or_insert_with(|| json!({}));
-    let entries_map = entries
-        .as_object_mut()
-        .ok_or("plugins.entries 节点格式错误")?;
-    let entry = entries_map
-        .entry(plugin_id.to_string())
-        .or_insert_with(|| json!({}));
-    let entry_obj = entry
-        .as_object_mut()
-        .ok_or("plugins.entries 条目格式错误")?;
-    entry_obj.insert("enabled".into(), Value::Bool(true));
+    if let Some(entries) = plugins.get_mut("entries").and_then(|v| v.as_object_mut()) {
+        entries.remove(plugin_id);
+        if entries.is_empty() {
+            plugins.remove("entries");
+        }
+    }
+
+    if plugins.is_empty() {
+        root.remove("plugins");
+    }
     Ok(())
 }
 
-fn plugin_backup_root() -> PathBuf {
-    super::openclaw_dir()
-        .join("backups")
-        .join("plugin-installs")
+fn remove_platform_config_entry(cfg: &mut Value, platform: &str) {
+    let storage_key = platform_storage_key(platform).to_string();
+    if let Some(channels) = cfg.get_mut("channels").and_then(|c| c.as_object_mut()) {
+        channels.remove(&storage_key);
+        if channels.is_empty() {
+            if let Some(root) = cfg.as_object_mut() {
+                root.remove("channels");
+            }
+        }
+    }
 }
+
+fn clear_wechat_runtime_files() -> Result<(), String> {
+    let runtime_dir = super::openclaw_dir().join("openclaw-weixin");
+    if runtime_dir.exists() {
+        fs::remove_dir_all(&runtime_dir).map_err(|e| format!("清理微信运行态失败: {e}"))?;
+    }
+    Ok(())
+}
+
+fn uninstall_channel_plugin_cleanup(
+    cfg: &mut Value,
+    plugin_id: &str,
+    platform: &str,
+) -> Result<(), String> {
+    remove_plugin_allow_entry(cfg, plugin_id)?;
+    if plugin_id == "openclaw-lark" {
+        remove_plugin_allow_entry(cfg, "feishu")?;
+    }
+    if plugin_id == "feishu" {
+        remove_plugin_allow_entry(cfg, "openclaw-lark")?;
+    }
+    remove_platform_config_entry(cfg, platform);
+    if plugin_id == "openclaw-weixin" || platform == "wechat" {
+        clear_wechat_runtime_files()?;
+    }
+    Ok(())
+}
+
 
 fn qqbot_plugin_dir() -> PathBuf {
     super::openclaw_dir().join("extensions").join("qqbot")

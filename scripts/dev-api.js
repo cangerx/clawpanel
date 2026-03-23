@@ -207,6 +207,46 @@ function postInstallChannelPlugin(pluginId) {
   }
 }
 
+function removePluginAllowEntry(cfg, pluginId) {
+  if (!cfg?.plugins || typeof cfg.plugins !== 'object') return
+  if (Array.isArray(cfg.plugins.allow)) {
+    cfg.plugins.allow = cfg.plugins.allow.filter(v => String(v || '').trim() !== pluginId)
+    if (!cfg.plugins.allow.length) delete cfg.plugins.allow
+  }
+  if (cfg.plugins.entries && typeof cfg.plugins.entries === 'object') {
+    delete cfg.plugins.entries[pluginId]
+    if (!Object.keys(cfg.plugins.entries).length) delete cfg.plugins.entries
+  }
+  if (cfg.plugins && typeof cfg.plugins === 'object' && !Object.keys(cfg.plugins).length) delete cfg.plugins
+}
+
+function removePlatformConfigEntry(cfg, platform) {
+  if (!cfg?.channels || typeof cfg.channels !== 'object') return false
+  const key = getPlatformConfigKey(platform)
+  if (!(key in cfg.channels)) return false
+  delete cfg.channels[key]
+  if (!Object.keys(cfg.channels).length) delete cfg.channels
+  return true
+}
+
+function reloadGatewaySafe() {
+  try {
+    handlers.reload_gateway()
+  } catch {
+    try { handlers.restart_gateway() } catch {}
+  }
+}
+
+function uninstallChannelPluginCleanup(pluginId, platform, cfg) {
+  const normalizedPluginId = String(pluginId || '').trim()
+  const normalizedPlatform = String(platform || '').trim()
+  removePluginAllowEntry(cfg, normalizedPluginId)
+  if (normalizedPluginId === 'openclaw-lark') removePluginAllowEntry(cfg, 'feishu')
+  if (normalizedPluginId === 'feishu') removePluginAllowEntry(cfg, 'openclaw-lark')
+  if (normalizedPlatform) removePlatformConfigEntry(cfg, normalizedPlatform)
+  if (normalizedPluginId === WECHAT_NATIVE_PLUGIN_ID || normalizedPlatform === 'wechat') clearWechatRuntimeFiles()
+}
+
 function resolveSafeLocalImage(filePath) {
   if (!filePath || typeof filePath !== 'string') return null
   const resolved = path.resolve(filePath)
@@ -2668,6 +2708,33 @@ const handlers = {
     }
     _serverCache.delete('plugins_list_output')
     return fallbackUsed ? '安装成功（备用方式）' : '安装成功'
+  },
+
+
+  uninstall_channel_plugin({ pluginId, platform }) {
+    const normalizedPluginId = String(pluginId || '').trim()
+    const normalizedPlatform = String(platform || '').trim()
+    if (!normalizedPluginId) throw new Error('pluginId 不能为空')
+    if (!normalizedPlatform) throw new Error('platform 不能为空')
+
+    const pluginDir = resolvePluginDir(normalizedPluginId)
+    if (pluginDir && fs.existsSync(pluginDir) && !fs.existsSync(path.join(pluginDir, 'package.json')) && !fs.existsSync(path.join(pluginDir, 'openclaw.plugin.json'))) {
+      throw new Error(`插件目录异常，已拒绝删除: ${pluginDir}`)
+    }
+
+    const cfg = fs.existsSync(CONFIG_PATH) ? readJsonFileSafe(CONFIG_PATH, {}) : {}
+    uninstallChannelPluginCleanup(normalizedPluginId, normalizedPlatform, cfg)
+    if (!fs.existsSync(OPENCLAW_DIR)) fs.mkdirSync(OPENCLAW_DIR, { recursive: true })
+    fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2))
+
+    if (pluginDir && fs.existsSync(pluginDir)) {
+      fs.rmSync(pluginDir, { recursive: true, force: true })
+    }
+
+    _serverCache.delete('plugins_list_output')
+    _serverCache.delete('svc_status')
+    reloadGatewaySafe()
+    return { ok: true, pluginId: normalizedPluginId, platform: normalizedPlatform }
   },
 
 

@@ -158,6 +158,7 @@ pub fn run() {
             messaging::read_platform_config,
             messaging::save_messaging_platform,
             messaging::remove_messaging_platform,
+            messaging::uninstall_channel_plugin,
             messaging::toggle_messaging_platform,
             messaging::verify_bot_token,
             messaging::list_configured_platforms,
