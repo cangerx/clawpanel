@@ -117,16 +117,18 @@ const PLATFORM_REGISTRY = {
   wechat: {
     label: '微信',
     iconName: 'smartphone',
-    desc: '微信官方 OpenClaw 插件，扫码即可接入微信对话',
+    desc: '基于 MCP 协议的微信机器人，扫码即可接入微信对话',
     guide: [
-      '点击「安装」，ClawPanel 会自动执行官方安装命令完成插件部署',
-      '安装完成后终端会显示二维码，使用手机微信扫码绑定',
-      '绑定成功后即可通过微信与 AI 对话，后续会自动保持登录状态',
+      '点击「安装」，ClawPanel 会自动安装 mcp-wechat-server 并配置 MCP',
+      '安装完成后，通过 AI 助手调用 login_qrcode 生成二维码',
+      '使用手机微信扫码绑定，绑定成功后即可通过微信与 AI 对话',
+      '支持消息轮询、打字状态显示、文本消息收发',
     ],
-    guideFooter: '<div style="margin-top:8px;font-size:var(--font-size-xs);color:var(--text-tertiary)">官方插件由腾讯微信团队开发维护，详见 <a href="https://finance.sina.cn/tech/2026-03-22/detail-inhrvnny2292312.d.html" target="_blank" style="color:var(--accent);text-decoration:underline">微信 OpenClaw 插件发布公告</a></div>',
+    guideFooter: '<div style="margin-top:8px;font-size:var(--font-size-xs);color:var(--text-tertiary)">基于 <a href="https://github.com/Howardzhangdqs/mcp-wechat-server" target="_blank" style="color:var(--accent);text-decoration:underline">mcp-wechat-server</a>（MCP 协议），需要 Bun 或 Node.js 运行环境</div>',
     fields: [],
-    pluginRequired: '@tencent-weixin/openclaw-weixin-cli@latest',
-    pluginId: 'wechat-clawbot',
+    pluginRequired: 'mcp-wechat-server',
+    pluginId: 'mcp-wechat-server',
+    mcpServer: true,
   },
   whatsapp: {
     label: 'WhatsApp',
@@ -663,7 +665,36 @@ async function openInstallDialog(pid, page, state) {
     let success = false
     const isTauriEnv = !!window.__TAURI_INTERNALS__
 
-    if (isTauriEnv) {
+    // MCP 类型插件：走全局 npm install + mcp.json 配置
+    if (reg.mcpServer) {
+      if (isTauriEnv) {
+        try {
+          appendLog(`正在全局安装 ${pluginPackage} ...`)
+          updateProgress(20)
+          await api.installMcpPlugin(pluginPackage, pid)
+          updateProgress(100)
+          appendLog('安装完成，MCP 配置已写入')
+          success = true
+        } catch (e) {
+          appendLog('安装失败: ' + (e.message || e))
+        }
+      } else {
+        try {
+          await new Promise((resolve, reject) => {
+            const handle = api.installMcpPluginStream(pluginPackage, pid, {
+              onLog: (line) => appendLog(line),
+              onProgress: (v) => updateProgress(v),
+              onDone: () => resolve(),
+              onError: (err) => reject(new Error(err.message || '安装失败')),
+            })
+            setTimeout(() => { handle.close(); reject(new Error('安装超时')) }, 120000)
+          })
+          success = true
+        } catch (e) {
+          appendLog('安装失败: ' + e.message)
+        }
+      }
+    } else if (isTauriEnv) {
       let unlistenLog, unlistenProgress
       try {
         const { listen } = await import('@tauri-apps/api/event')
@@ -706,6 +737,22 @@ async function openInstallDialog(pid, page, state) {
 
       if (verified) {
         state.pluginStatus[pid] = { installed: true, builtin: false }
+
+        // MCP 类型插件：自动写入 mcp.json 配置
+        if (reg.mcpServer) {
+          try {
+            const mcpCfg = await api.readMcpConfig() || {}
+            if (!mcpCfg.mcpServers) mcpCfg.mcpServers = {}
+            if (!mcpCfg.mcpServers[pid]) {
+              mcpCfg.mcpServers[pid] = { command: 'npx', args: [pluginPackage] }
+              await api.writeMcpConfig(mcpCfg)
+              appendLog('已自动添加 MCP 服务配置')
+            }
+          } catch (e) {
+            appendLog('MCP 配置写入失败: ' + e)
+          }
+        }
+
         progressArea.innerHTML = `
           <div style="background:var(--success-muted);color:var(--success);padding:12px 14px;border-radius:var(--radius-md);font-size:var(--font-size-sm);display:flex;align-items:center;gap:8px">
             ${icon('check', 16)} 安装成功！

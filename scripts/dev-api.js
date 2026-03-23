@@ -2093,7 +2093,24 @@ const handlers = {
     if (!pluginId || !pluginId.trim()) throw new Error('pluginId 不能为空')
     const pid = pluginId.trim()
     const pluginDir = path.join(OPENCLAW_DIR, 'plugins', 'node_modules', pid)
-    const installed = fs.existsSync(pluginDir) && fs.existsSync(path.join(pluginDir, 'package.json'))
+    let installed = fs.existsSync(pluginDir) && fs.existsSync(path.join(pluginDir, 'package.json'))
+
+    // MCP 类型插件：检查全局 npm 安装 或 mcp.json 中已配置
+    if (!installed) {
+      try {
+        const npmCmd = isWindows ? 'npm.cmd' : 'npm'
+        const result = spawnSync(npmCmd, ['list', '-g', pid, '--depth=0'], { timeout: 10000, encoding: 'utf8' })
+        if (result.stdout && result.stdout.includes(pid)) installed = true
+      } catch {}
+    }
+    if (!installed && fs.existsSync(MCP_CONFIG_PATH)) {
+      try {
+        const mcpCfg = JSON.parse(fs.readFileSync(MCP_CONFIG_PATH, 'utf8'))
+        if (mcpCfg.mcpServers?.[pid] || Object.values(mcpCfg.mcpServers || {}).some(s => (s.args || []).includes(pid))) {
+          installed = true
+        }
+      } catch {}
+    }
     // 检测是否为内置插件（使用缓存避免重复调用 CLI）
     let builtin = false
     const cacheKey = 'plugins_list_output'
@@ -2151,6 +2168,32 @@ const handlers = {
     }
     _serverCache.delete('plugins_list_output')
     return fallbackUsed ? '安装成功（备用方式）' : '安装成功'
+  },
+
+  // MCP 类型插件安装（全局 npm install + 写入 mcp.json）
+  install_mcp_plugin({ packageName, serverId }) {
+    if (!packageName || !serverId) throw new Error('packageName 和 serverId 不能为空')
+    const pkg = packageName.trim()
+    const sid = serverId.trim()
+    const npmCmd = isWindows ? 'npm.cmd' : 'npm'
+
+    // 全局安装
+    try {
+      execSync(`${npmCmd} install -g ${pkg}`, { timeout: 120000, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+    } catch (e) {
+      throw new Error(`MCP 插件 ${pkg} 安装失败: ` + (e.stderr || e.message || e))
+    }
+
+    // 写入 mcp.json
+    let mcpCfg = {}
+    if (fs.existsSync(MCP_CONFIG_PATH)) {
+      try { mcpCfg = JSON.parse(fs.readFileSync(MCP_CONFIG_PATH, 'utf8')) } catch {}
+    }
+    if (!mcpCfg.mcpServers) mcpCfg.mcpServers = {}
+    mcpCfg.mcpServers[sid] = { command: 'npx', args: [pkg] }
+    fs.writeFileSync(MCP_CONFIG_PATH, JSON.stringify(mcpCfg, null, 2))
+
+    return '安装成功，已添加 MCP 配置'
   },
 
   async pairing_list_channel({ channel }) {
@@ -4607,6 +4650,75 @@ async function _apiMiddleware(req, res, next) {
       res.setHeader('Content-Type', 'application/json')
       res.end(JSON.stringify({ error: `实例「${activeInst.name}」不可达: ${e.message}` }))
     }
+    return
+  }
+
+  // --- SSE 流式 MCP 插件安装 ---
+  if (cmd === 'mcp_plugin_install_stream') {
+    const args = await readBody(req)
+    const packageName = args.packageName?.trim()
+    const serverId = args.serverId?.trim()
+    if (!packageName || !serverId) {
+      res.statusCode = 400
+      res.setHeader('Content-Type', 'application/json')
+      res.end(JSON.stringify({ error: 'packageName 和 serverId 不能为空' }))
+      return
+    }
+    res.setHeader('Content-Type', 'text/event-stream')
+    res.setHeader('Cache-Control', 'no-cache')
+    res.setHeader('Connection', 'keep-alive')
+    res.setHeader('X-Accel-Buffering', 'no')
+    res.flushHeaders?.()
+
+    const sendSSE = (event, data) => {
+      res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
+    }
+
+    const npmCmd = isWindows ? 'npm.cmd' : 'npm'
+    const child = spawn(npmCmd, ['install', '-g', packageName], {
+      cwd: homedir(),
+      env: { ...process.env, PATH: process.env.PATH },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+
+    let progress = 0
+    const onData = (chunk) => {
+      chunk.toString().split(/\r?\n/).filter(Boolean).forEach(line => sendSSE('log', line))
+      progress = Math.min(progress + 20, 90)
+      sendSSE('progress', progress)
+    }
+    child.stdout.on('data', onData)
+    child.stderr.on('data', onData)
+
+    child.on('close', (code) => {
+      if (code === 0) {
+        // 写入 mcp.json
+        try {
+          let mcpCfg = {}
+          if (fs.existsSync(MCP_CONFIG_PATH)) {
+            try { mcpCfg = JSON.parse(fs.readFileSync(MCP_CONFIG_PATH, 'utf8')) } catch {}
+          }
+          if (!mcpCfg.mcpServers) mcpCfg.mcpServers = {}
+          mcpCfg.mcpServers[serverId] = { command: 'npx', args: [packageName] }
+          fs.writeFileSync(MCP_CONFIG_PATH, JSON.stringify(mcpCfg, null, 2))
+          sendSSE('log', 'MCP 配置已写入 mcp.json')
+        } catch (e) {
+          sendSSE('log', 'MCP 配置写入失败: ' + e.message)
+        }
+        sendSSE('progress', 100)
+        sendSSE('done', { ok: true, message: '安装成功，已添加 MCP 配置' })
+      } else {
+        sendSSE('error', { message: `MCP 插件安装失败 (exit ${code})` })
+      }
+      res.end()
+    })
+
+    child.on('error', (err) => {
+      sendSSE('error', { message: err.message })
+      res.end()
+    })
+
+    req.on('close', () => { if (!child.killed) child.kill() })
     return
   }
 
