@@ -1,9 +1,9 @@
 {
   "version": "1.0.0",
   "minAppVersion": "1.0.0",
-  "hash": "",
+  "hash": "sha256:cd739492099e38d7fb998a7420f234f712f8fa0ff23406527de76a750215de2b",
   "url": "https://github.com/cangerx/clawpanel/releases/download/v1.0.0/web-1.0.0.zip",
-  "size": 0,
-  "changelog": "1.0.0 release",
-  "releasedAt": "2026-03-23T00:00:00Z"
+  "size": 2016716,
+  "changelog": "",
+  "releasedAt": "2026-03-23T12:08:43Z"
 }
