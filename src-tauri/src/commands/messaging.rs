@@ -59,7 +59,9 @@ fn ensure_plugin_allowed(cfg: &mut Value, plugin_id: &str) -> Result<(), String>
     let entries_obj = entries
         .as_object_mut()
         .ok_or("plugins.entries 节点格式错误")?;
-    let entry = entries_obj.entry(plugin_id.into()).or_insert_with(|| json!({}));
+    let entry = entries_obj
+        .entry(plugin_id.into())
+        .or_insert_with(|| json!({}));
     let entry_obj = entry
         .as_object_mut()
         .ok_or("plugins.entries.<plugin_id> 节点格式错误")?;
@@ -517,7 +519,10 @@ pub async fn uninstall_channel_plugin(
 
     let plugin_dir = generic_plugin_dir(&plugin_id);
     if plugin_dir.exists() && !plugin_install_marker_exists(&plugin_dir) {
-        return Err(format!("插件目录异常，已拒绝删除: {}", plugin_dir.display()));
+        return Err(format!(
+            "插件目录异常，已拒绝删除: {}",
+            plugin_dir.display()
+        ));
     }
 
     let mut cfg = super::config::load_openclaw_json().unwrap_or_else(|_| json!({}));
@@ -863,7 +868,6 @@ fn uninstall_channel_plugin_cleanup(
     }
     Ok(())
 }
-
 
 fn qqbot_plugin_dir() -> PathBuf {
     super::openclaw_dir().join("extensions").join("qqbot")

@@ -163,6 +163,10 @@ jobs:
           HASH=$(sha256sum "web-${VERSION}.zip" | cut -d' ' -f1)
           SIZE=$(stat -c%s "web-${VERSION}.zip" 2>/dev/null || stat -f%z "web-${VERSION}.zip")
 
+          # 确保 Release 已存在（部分平台构建失败时 tauri-action 可能未创建）
+          gh release view "$TAG_NAME" >/dev/null 2>&1 || \
+            gh release create "$TAG_NAME" --title "ClawPanel ${TAG_NAME}" --notes "正在构建所有平台安装包，请稍候..."
+
           # 上传为 Release Asset
           gh release upload "$TAG_NAME" "web-${VERSION}.zip" --clobber
 
