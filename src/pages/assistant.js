@@ -47,12 +47,14 @@ const DEFAULT_MODE = 'execute'
 
 // ── API 类型（从共享模块导入）──
 const API_TYPES = SHARED_API_TYPES
+const IS_TAURI = !!window.__TAURI_INTERNALS__
 
 function normalizeApiType(raw) {
   const type = (raw || '').trim()
   if (type === 'anthropic' || type === 'anthropic-messages') return 'anthropic-messages'
-  if (type === 'google-gemini') return 'google-gemini'
-  if (type === 'openai' || type === 'openai-completions' || type === 'openai-responses') return 'openai-completions'
+  if (type === 'google-gemini' || type === 'google-generative-ai') return 'google-gemini'
+  if (type === 'openai-responses') return 'openai-responses'
+  if (type === 'openai' || type === 'openai-completions') return 'openai-completions'
   return 'openai-completions'
 }
 
@@ -1303,7 +1305,7 @@ async function fetchWithRetry(url, options, retries = 3) {
   const delays = [1000, 3000, 8000]
   for (let i = 0; i <= retries; i++) {
     try {
-      const resp = await fetch(url, options)
+      const resp = await assistantFetch(url, options)
       if (resp.ok || resp.status < 500 || i >= retries) return resp
       // 5xx 服务端错误，静默重试
       await new Promise(r => setTimeout(r, delays[i]))
@@ -1313,6 +1315,24 @@ async function fetchWithRetry(url, options, retries = 3) {
       await new Promise(r => setTimeout(r, delays[i]))
     }
   }
+}
+
+async function assistantFetch(url, options = {}) {
+  if (IS_TAURI) return fetch(url, options)
+
+  const headers = { ...(options.headers || {}) }
+  const resp = await fetch('/__api/assistant_proxy', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      url,
+      method: options.method || 'GET',
+      headers,
+      body: typeof options.body === 'string' ? options.body : (options.body == null ? null : JSON.stringify(options.body)),
+    }),
+    signal: options.signal,
+  })
+  return resp
 }
 
 // ── 配置读写 ──
@@ -2839,6 +2859,64 @@ function showSettings() {
   // 临时副本，保存时写回 _config
   let kbFiles = JSON.parse(JSON.stringify(_config.knowledgeFiles || []))
 
+  const getDraftState = () => {
+    const soulRadio = overlay.querySelector('input[name="ast-soul-source"]:checked')
+    const soulMode = soulRadio?.value === 'openclaw' ? 'openclaw' : 'default'
+    const selectedAgent = overlay.querySelector('#ast-soul-agent')?.value || c.soulSource?.replace('openclaw:', '') || 'main'
+    return {
+      assistantName: overlay.querySelector('#ast-name')?.value.trim() || DEFAULT_NAME,
+      assistantPersonality: overlay.querySelector('#ast-personality')?.value.trim() || DEFAULT_PERSONALITY,
+      baseUrl: overlay.querySelector('#ast-baseurl')?.value.trim() || '',
+      apiKey: overlay.querySelector('#ast-apikey')?.value.trim() || '',
+      model: overlay.querySelector('#ast-model')?.value.trim() || '',
+      temperature: parseFloat(overlay.querySelector('#ast-temp')?.value) || 0.7,
+      apiType: normalizeApiType(overlay.querySelector('#ast-apitype')?.value || 'openai-completions'),
+      tools: {
+        terminal: !!overlay.querySelector('#ast-tool-terminal')?.checked,
+        fileOps: !!overlay.querySelector('#ast-tool-fileops')?.checked,
+        webSearch: !!overlay.querySelector('#ast-tool-websearch')?.checked,
+      },
+      autoRounds: parseInt(overlay.querySelector('#ast-auto-rounds')?.value, 10) || 0,
+      soulSource: soulMode === 'openclaw' ? `openclaw:${selectedAgent}` : 'default',
+      knowledgeFiles: JSON.parse(JSON.stringify(kbFiles)),
+      kbEditorVisible: kbEditorEl.style.display !== 'none',
+      kbEditorName: overlay.querySelector('#ast-kb-name')?.value.trim() || '',
+      kbEditorContent: overlay.querySelector('#ast-kb-content')?.value.trim() || '',
+      kbEditIdx,
+    }
+  }
+  const initialDraftState = JSON.stringify({
+    assistantName: c.assistantName || DEFAULT_NAME,
+    assistantPersonality: c.assistantPersonality || DEFAULT_PERSONALITY,
+    baseUrl: c.baseUrl || '',
+    apiKey: c.apiKey || '',
+    model: c.model || '',
+    temperature: c.temperature || 0.7,
+    apiType: normalizeApiType(c.apiType || 'openai-completions'),
+    tools: {
+      terminal: c.tools?.terminal !== false,
+      fileOps: c.tools?.fileOps !== false,
+      webSearch: c.tools?.webSearch !== false,
+    },
+    autoRounds: c.autoRounds ?? 8,
+    soulSource: c.soulSource || 'default',
+    knowledgeFiles: JSON.parse(JSON.stringify(_config.knowledgeFiles || [])),
+    kbEditorVisible: false,
+    kbEditorName: '',
+    kbEditorContent: '',
+    kbEditIdx: -1,
+  })
+  let closing = false
+  const closeSettings = async (force = false) => {
+    if (closing) return
+    if (!force && JSON.stringify(getDraftState()) !== initialDraftState) {
+      const discard = await showConfirm('当前有未保存的 AI 助手设置，确定要放弃这些修改吗？')
+      if (!discard) return
+    }
+    closing = true
+    overlay.remove()
+  }
+
   const renderKBList = () => {
     if (kbFiles.length === 0) {
       kbListEl.innerHTML = `<div style="text-align:center;padding:20px 0;color:var(--text-tertiary);font-size:12px">
@@ -2970,21 +3048,9 @@ function showSettings() {
     cangerStatus.innerHTML = '<span style="color:rgba(255,255,255,0.5)">正在连接苍洱API...</span>'
     const t0 = Date.now()
     try {
-      const resp = await fetch(CANGERAPI.baseUrl + '/chat/completions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
-        body: JSON.stringify({ model: selectedModel, messages: [{ role: 'user', content: 'Hi' }], max_tokens: 10 }),
-        signal: AbortSignal.timeout(15000)
-      })
+      const reply = await api.testModel(CANGERAPI.baseUrl, key, selectedModel, 'openai-completions')
       const ms = Date.now() - t0
-      if (resp.ok) {
-        const data = await resp.json()
-        const reply = data.choices?.[0]?.message?.content || ''
-        cangerStatus.innerHTML = `<span style="color:#34d399">${statusIcon('ok', 14)} 测试通过（${(ms/1000).toFixed(1)}s）</span><span style="color:rgba(255,255,255,0.4);margin-left:6px">${selectedModel} 响应正常</span>`
-      } else {
-        const errText = await resp.text().catch(() => '')
-        cangerStatus.innerHTML = `<span style="color:#f87171">${statusIcon('err', 14)} 测试失败（HTTP ${resp.status}）</span><span style="color:rgba(255,255,255,0.4);margin-left:6px">${errText.slice(0, 80)}</span>`
-      }
+      cangerStatus.innerHTML = `<span style="color:#34d399">${statusIcon('ok', 14)} 测试通过（${(ms / 1000).toFixed(1)}s）</span><span style="color:rgba(255,255,255,0.4);margin-left:6px">${escHtml(String(reply).slice(0, 80))}</span>`
     } catch (err) {
       cangerStatus.innerHTML = `<span style="color:#f87171">${statusIcon('err', 14)} 连接失败：${err.message}</span>`
     }
@@ -3077,75 +3143,33 @@ function showSettings() {
     btn.textContent = '测试中...'
     resultEl.innerHTML = '<span style="color:var(--text-tertiary)">正在发送测试消息...</span>'
     const base = cleanBaseUrl(baseUrl, selApiType)
-    const hdrs = authHeaders(selApiType, apiKey)
     const t0 = Date.now()
-
-    let respStatus = 0, respBody = '', reply = '', usedApi = '', reqUrl = '', reqBody = {}
+    let reply = ''
+    let usedApi = ''
+    let reqUrl = ''
+    let reqBody = {}
 
     try {
       if (selApiType === 'anthropic-messages') {
         usedApi = 'Anthropic Messages'
         reqUrl = base + '/messages'
         reqBody = { model, messages: [{ role: 'user', content: '你好，请用一句话回复' }], max_tokens: 200 }
-        const resp = await fetch(reqUrl, { method: 'POST', headers: hdrs, body: JSON.stringify(reqBody), signal: AbortSignal.timeout(30000) })
-        respStatus = resp.status; respBody = await resp.text()
-        try {
-          const data = JSON.parse(respBody)
-          reply = data.content?.filter(b => b.type === 'text').map(b => b.text).join('') || ''
-        } catch {}
       } else if (selApiType === 'google-gemini') {
         usedApi = 'Gemini'
         reqUrl = `${base}/models/${model}:generateContent?key=***`
         reqBody = { contents: [{ role: 'user', parts: [{ text: '你好，请用一句话回复' }] }] }
-        const realUrl = `${base}/models/${model}:generateContent?key=${apiKey}`
-        const resp = await fetch(realUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(reqBody), signal: AbortSignal.timeout(30000) })
-        respStatus = resp.status; respBody = await resp.text()
-        try {
-          const data = JSON.parse(respBody)
-          reply = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
-        } catch {}
       } else {
-        // OpenAI: Chat Completions + Responses fallback
-        usedApi = 'Chat Completions'
+        usedApi = selApiType === 'openai-responses' ? 'Responses' : 'Chat Completions'
         reqUrl = base + '/chat/completions'
         reqBody = { model, messages: [{ role: 'user', content: '你好，请用一句话回复' }], max_tokens: 200 }
-        const resp = await fetch(reqUrl, { method: 'POST', headers: hdrs, body: JSON.stringify(reqBody), signal: AbortSignal.timeout(30000) })
-        respStatus = resp.status; respBody = await resp.text()
-
-        let fallback = false
-        if (!resp.ok && (respBody.includes('legacy protocol') || respBody.includes('/v1/responses') || respBody.includes('not supported'))) {
-          fallback = true
-        }
-
-        if (!fallback) {
-          try {
-            const data = JSON.parse(respBody)
-            const msg = data.choices?.[0]?.message
-            reply = msg?.content || msg?.reasoning_content || data.choices?.[0]?.text || data.output?.text || ''
-            if (!msg?.content && msg?.reasoning_content) reply = '[推理内容] ' + reply
-          } catch {}
-        }
-
-        if (fallback) {
-          usedApi = 'Responses'
-          reqUrl = base + '/responses'
-          reqBody = { model, input: [{ role: 'user', content: '你好，请用一句话回复' }], max_output_tokens: 200 }
-          try {
-            const resp2 = await fetch(reqUrl, { method: 'POST', headers: hdrs, body: JSON.stringify(reqBody), signal: AbortSignal.timeout(30000) })
-            respStatus = resp2.status; respBody = await resp2.text()
-            try { const d = JSON.parse(respBody); reply = d.output_text || d.output?.[0]?.content?.[0]?.text || '' } catch {}
-          } catch (err2) {
-            resultEl.innerHTML = buildTestResult({ success: false, elapsed: Date.now() - t0, usedApi, reqUrl, reqBody, respStatus: 0, respBody: '', error: err2.message })
-            btn.disabled = false; btn.textContent = '测试'; return
-          }
-        }
       }
+      reply = await api.testModel(baseUrl, apiKey, model, selApiType)
     } catch (err) {
       resultEl.innerHTML = buildTestResult({ success: false, elapsed: Date.now() - t0, usedApi, reqUrl, reqBody, respStatus: 0, respBody: '', error: err.message })
       btn.disabled = false; btn.textContent = '测试'; return
     }
 
-    resultEl.innerHTML = buildTestResult({ success: !!reply, elapsed: Date.now() - t0, usedApi, reqUrl, reqBody, respStatus, respBody, reply })
+    resultEl.innerHTML = buildTestResult({ success: !!reply, elapsed: Date.now() - t0, usedApi, reqUrl, reqBody, respStatus: 200, respBody: '{"proxied":true}', reply })
     btn.disabled = false
     btn.textContent = '测试'
   }
@@ -3164,48 +3188,7 @@ function showSettings() {
     btn.textContent = '获取中...'
     resultEl.innerHTML = '<span style="color:var(--text-tertiary)">正在获取模型列表...</span>'
     try {
-      const base = cleanBaseUrl(baseUrl, selApiType)
-      const hdrs = authHeaders(selApiType, apiKey)
-      let models = []
-
-      if (selApiType === 'anthropic-messages') {
-        // Anthropic: GET /v1/models
-        const resp = await fetch(base + '/models', { headers: hdrs, signal: AbortSignal.timeout(10000) })
-        if (!resp.ok) {
-          const text = await resp.text().catch(() => '')
-          let msg = 'HTTP ' + resp.status
-          try { msg = JSON.parse(text).error?.message || msg } catch {}
-          resultEl.innerHTML = '<span style="color:var(--error)">✗ ' + escHtml(msg) + '</span>'
-          return
-        }
-        const data = await resp.json()
-        models = (data.data || []).map(m => m.id).filter(Boolean).sort()
-      } else if (selApiType === 'google-gemini') {
-        // Gemini: GET /models?key=xxx
-        const resp = await fetch(base + '/models?key=' + apiKey, { signal: AbortSignal.timeout(10000) })
-        if (!resp.ok) {
-          const text = await resp.text().catch(() => '')
-          let msg = 'HTTP ' + resp.status
-          try { msg = JSON.parse(text).error?.message || msg } catch {}
-          resultEl.innerHTML = '<span style="color:var(--error)">✗ ' + escHtml(msg) + '</span>'
-          return
-        }
-        const data = await resp.json()
-        models = (data.models || []).map(m => m.name?.replace('models/', '') || m.name).filter(Boolean).sort()
-      } else {
-        // OpenAI: GET /v1/models
-        const resp = await fetch(base + '/models', { headers: hdrs, signal: AbortSignal.timeout(10000) })
-        if (!resp.ok) {
-          const text = await resp.text().catch(() => '')
-          let msg = 'HTTP ' + resp.status
-          try { msg = JSON.parse(text).error?.message || msg } catch {}
-          resultEl.innerHTML = '<span style="color:var(--error)">✗ ' + escHtml(msg) + '</span>'
-          return
-        }
-        const data = await resp.json()
-        models = (data.data || []).map(m => m.id).filter(Boolean).sort()
-      }
-
+      const models = await api.listRemoteModels(baseUrl, apiKey, selApiType)
       if (models.length === 0) {
         resultEl.innerHTML = '<span style="color:var(--warning)">未发现可用模型</span>'
         return
@@ -3344,13 +3327,13 @@ function showSettings() {
     if (dropdown.children.length > 0) dropdown.style.display = 'block'
   })
   overlay.addEventListener('click', (e) => {
-    if (e.target === overlay) { overlay.remove(); return }
+    if (e.target === overlay) { closeSettings(); return }
     if (!e.target.closest('#ast-model') && !e.target.closest('#ast-model-dropdown') && !e.target.closest('#ast-btn-models')) {
       dropdown.style.display = 'none'
     }
   })
 
-  overlay.querySelector('[data-action="cancel"]').onclick = () => overlay.remove()
+  overlay.querySelector('[data-action="cancel"]').onclick = () => closeSettings()
   overlay.querySelector('[data-action="confirm"]').onclick = () => {
     _config.assistantName = overlay.querySelector('#ast-name').value.trim() || DEFAULT_NAME
     _config.assistantPersonality = overlay.querySelector('#ast-personality').value.trim() || DEFAULT_PERSONALITY
@@ -3395,9 +3378,10 @@ function showSettings() {
     renderMessages()
     toast('设置已保存', 'info')
     updateModelBadge()
+    closing = true
   }
   overlay.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') overlay.remove()
+    if (e.key === 'Escape') closeSettings()
   })
   const firstInput = overlay.querySelector('input')
   if (firstInput) firstInput.focus()

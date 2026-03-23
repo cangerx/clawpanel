@@ -79,6 +79,10 @@ let _availableModels = []
 let _primaryModel = ''
 let _selectedModel = ''
 let _isApplyingModel = false
+let _globalSkillNames = new Set()
+let _sessionSkillNames = new Set()
+let _sessionSkillHintKey = ''
+let _sessionSkillSnapshotExists = false
 
 // ── 托管 Agent ──
 const HOSTED_STATUS = { IDLE: 'idle', RUNNING: 'running', WAITING: 'waiting_reply', PAUSED: 'paused', ERROR: 'error' }
@@ -674,6 +678,7 @@ async function connectGateway() {
         _sessionKey = saved || sessionKey
         updateSessionTitle()
         loadHistory()
+        refreshSessionSkillState()
       }
       // 始终刷新会话列表（无论是否有 sessionKey）
       refreshSessionList()
@@ -693,6 +698,7 @@ async function connectGateway() {
       updateSessionTitle()
       loadHistory()
       refreshSessionList()
+      refreshSessionSkillState()
       return
     }
 
@@ -805,6 +811,7 @@ function switchSession(newKey) {
   clearMessages()
   loadHistory()
   refreshSessionList()
+  refreshSessionSkillState()
 }
 
 async function showNewSessionDialog() {
@@ -856,6 +863,42 @@ async function showNewSessionDialog() {
   } catch (e) {
     console.warn('[chat] 加载 Agent 列表失败:', e)
   }
+}
+
+async function refreshSessionSkillState() {
+  if (!_sessionKey) return
+  try {
+    const [skillsData, snapshot] = await Promise.all([
+      api.skillsList().catch(() => ({ skills: [] })),
+      api.getSessionSkillsSnapshot(_sessionKey).catch(() => ({ skillNames: [] })),
+    ])
+    const installed = Array.isArray(skillsData?.skills) ? skillsData.skills : []
+    _globalSkillNames = new Set(
+      installed
+        .filter(s => !s?.disabled)
+        .map(s => String(s?.name || '').trim())
+        .filter(Boolean)
+    )
+    _sessionSkillSnapshotExists = !!snapshot?.exists
+    _sessionSkillNames = new Set(Array.isArray(snapshot?.skillNames) ? snapshot.skillNames : [])
+    maybeShowSessionSkillHint()
+  } catch (e) {
+    console.warn('[chat] refreshSessionSkillState error:', e)
+  }
+}
+
+function maybeShowSessionSkillHint() {
+  if (!_messagesEl || !_sessionKey) return
+  if (!_sessionSkillSnapshotExists) return
+  const missing = []
+  for (const name of _globalSkillNames) {
+    if (!_sessionSkillNames.has(name)) missing.push(name)
+  }
+  if (!missing.length) return
+  const hintKey = `${_sessionKey}:${missing.sort().join(',')}`
+  if (_sessionSkillHintKey === hintKey) return
+  _sessionSkillHintKey = hintKey
+  appendSystemMessage('当前会话技能快照落后于已安装技能。新装的 skill 不会在旧会话里立即生效，请新建会话或重置当前会话后再试。')
 }
 
 async function deleteSession(key) {
@@ -1136,6 +1179,13 @@ function handleChatEvent(payload) {
       const ids = _toolRunIndex.get(runId) || []
       finalTools = ids.map(id => mergeToolEventData({ id, name: '工具' })).filter(Boolean)
     }
+    if (finalTools.length) {
+      const hintedImages = []
+      const hintedFiles = []
+      collectMediaHintsFromTools(finalTools, hintedImages, hintedFiles)
+      if (!finalImages.length && hintedImages.length) finalImages.push(...hintedImages)
+      if (!finalFiles.length && hintedFiles.length) finalFiles.push(...hintedFiles)
+    }
     if (finalImages.length) _currentAiImages = finalImages
     if (finalVideos.length) _currentAiVideos = finalVideos
     if (finalAudios.length) _currentAiAudios = finalAudios
@@ -1287,10 +1337,17 @@ function extractChatContent(message) {
     } else if (output && !tools[0].output) {
       tools[0].output = output
     }
-    return { text: '', images: [], videos: [], audios: [], files: [], tools }
+    const images = [], files = []
+    collectMediaHintsFromTools(tools, images, files)
+    return { text: '', images, videos: [], audios: [], files, tools }
   }
   const content = message.content
-  if (typeof content === 'string') return { text: stripThinkingTags(content), images: [], videos: [], audios: [], files: [], tools }
+  if (typeof content === 'string') {
+    const text = stripThinkingTags(content)
+    const images = [], files = []
+    collectMediaHintsFromString(text, images, files)
+    return { text, images, videos: [], audios: [], files, tools }
+  }
   if (Array.isArray(content)) {
     const texts = [], images = [], videos = [], audios = [], files = []
     for (const block of content) {
@@ -1340,6 +1397,7 @@ function extractChatContent(message) {
         if (typeof t.input === 'string') t.input = stripAnsi(t.input)
         if (typeof t.output === 'string') t.output = stripAnsi(t.output)
       })
+      collectMediaHintsFromTools(tools, images, files)
     }
     // 从 mediaUrl/mediaUrls 提取
     const mediaUrls = message.mediaUrls || (message.mediaUrl ? [message.mediaUrl] : [])
@@ -1351,15 +1409,59 @@ function extractChatContent(message) {
       else files.push({ url, name: url.split('/').pop().split('?')[0] || '文件', mimeType: '' })
     }
     const text = texts.length ? stripThinkingTags(texts.join('\n')) : ''
+    if (text) collectMediaHintsFromString(text, images, files)
     return { text, images, videos, audios, files, tools }
   }
-  if (typeof message.text === 'string') return { text: stripThinkingTags(message.text), images: [], videos: [], audios: [], files: [], tools: [] }
+  if (typeof message.text === 'string') {
+    const text = stripThinkingTags(message.text)
+    const images = [], files = []
+    collectMediaHintsFromString(text, images, files)
+    return { text, images, videos: [], audios: [], files, tools: [] }
+  }
   return null
 }
 
 function stripAnsi(text) {
   if (!text) return ''
   return text.replace(/\u001b\[[0-9;]*[A-Za-z]/g, '')
+}
+
+function buildLocalImageProxyUrl(filePath) {
+  return `/__api/local_image?path=${encodeURIComponent(filePath)}`
+}
+
+function collectMediaHintsFromString(raw, images, files) {
+  if (typeof raw !== 'string' || !raw) return
+  const text = stripAnsi(raw)
+  const localImageRe = /((?:\/Users|\/home|\/root)\/[^\s"'`]+?\.(?:png|jpe?g|gif|webp|svg))/gi
+  const webUrlRe = /(https?:\/\/[^\s"'`]+)/gi
+  const seen = new Set()
+
+  for (const match of text.matchAll(localImageRe)) {
+    const filePath = match[1]
+    if (!filePath || seen.has(`img:${filePath}`)) continue
+    seen.add(`img:${filePath}`)
+    images.push({ url: buildLocalImageProxyUrl(filePath), mediaType: 'image/png' })
+  }
+
+  for (const match of text.matchAll(webUrlRe)) {
+    const url = match[1]
+    if (!url || seen.has(`url:${url}`)) continue
+    seen.add(`url:${url}`)
+    if (/\.(jpe?g|png|gif|webp|heic|svg)(\?|$)/i.test(url)) {
+      images.push({ url, mediaType: 'image/png' })
+    } else {
+      files.push({ url, name: url.replace(/^https?:\/\//, '').slice(0, 80) || '链接', mimeType: 'text/uri-list' })
+    }
+  }
+}
+
+function collectMediaHintsFromTools(tools, images, files) {
+  if (!Array.isArray(tools) || !tools.length) return
+  tools.forEach(tool => {
+    const output = typeof tool?.output === 'string' ? tool.output : safeStringify(tool?.output)
+    collectMediaHintsFromString(output, images, files)
+  })
 }
 
 function escapeHtml(text) {
@@ -1673,7 +1775,9 @@ function extractContent(msg) {
     } else if (output && !tools[0].output) {
       tools[0].output = output
     }
-    return { text: '', images: [], videos: [], audios: [], files: [], tools }
+    const images = [], files = []
+    collectMediaHintsFromTools(tools, images, files)
+    return { text: '', images, videos: [], audios: [], files, tools }
   }
   if (Array.isArray(msg.content)) {
     const texts = [], images = [], videos = [], audios = [], files = []
@@ -1724,6 +1828,7 @@ function extractContent(msg) {
         if (typeof t.input === 'string') t.input = stripAnsi(t.input)
         if (typeof t.output === 'string') t.output = stripAnsi(t.output)
       })
+      collectMediaHintsFromTools(tools, images, files)
     }
     const mediaUrls = msg.mediaUrls || (msg.mediaUrl ? [msg.mediaUrl] : [])
     for (const url of mediaUrls) {
@@ -1733,10 +1838,15 @@ function extractContent(msg) {
       else if (/\.(jpe?g|png|gif|webp|heic|svg)(\?|$)/i.test(url)) images.push({ url, mediaType: 'image/png' })
       else files.push({ url, name: url.split('/').pop().split('?')[0] || '文件', mimeType: '' })
     }
-    return { text: stripThinkingTags(texts.join('\n')), images, videos, audios, files, tools }
+    const text = stripThinkingTags(texts.join('\n'))
+    if (text) collectMediaHintsFromString(text, images, files)
+    return { text, images, videos, audios, files, tools }
   }
   const text = typeof msg.text === 'string' ? msg.text : (typeof msg.content === 'string' ? msg.content : '')
-  return { text: stripThinkingTags(text), images: [], videos: [], audios: [], files: [], tools }
+  const normalized = stripThinkingTags(text)
+  const images = [], files = []
+  if (normalized) collectMediaHintsFromString(normalized, images, files)
+  return { text: normalized, images, videos: [], audios: [], files, tools }
 }
 
 // ── DOM 操作 ──
@@ -1816,6 +1926,7 @@ function appendAiMessage(text, msgTime, images, videos, audios, files, tools) {
   appendVideosToEl(bubble, videos)
   appendAudiosToEl(bubble, audios)
   appendFilesToEl(bubble, files)
+  appendWechatQuickActions(bubble, text, images, tools)
   // 图片点击灯箱
   bubble.querySelectorAll('img').forEach(img => { if (!img.onclick) img.onclick = () => showLightbox(img.src) })
 
@@ -1827,6 +1938,7 @@ function appendAiMessage(text, msgTime, images, videos, audios, files, tools) {
   wrap.appendChild(meta)
   _messagesEl.insertBefore(wrap, _typingEl)
   scrollToBottom()
+  focusWechatQrIfPresent(bubble, images)
 }
 
 /** 渲染图片到消息气泡（支持 Anthropic/OpenAI/直接格式） */
@@ -1856,6 +1968,38 @@ function appendImagesToEl(el, images) {
     container.appendChild(imgEl)
   })
   if (container.children.length) el.appendChild(container)
+}
+
+function appendWechatQuickActions(el, text, images, tools) {
+  const actions = getWechatQuickActions(text, images, tools)
+  if (!actions.length) return
+  const bar = document.createElement('div')
+  bar.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;margin-top:10px'
+  actions.forEach(action => {
+    const btn = document.createElement('button')
+    btn.type = 'button'
+    btn.className = 'btn btn-sm btn-secondary'
+    btn.textContent = action.label
+    btn.onclick = () => sendQuickPrompt(action.prompt)
+    bar.appendChild(btn)
+  })
+  el.appendChild(bar)
+}
+
+function getWechatQuickActions(text, images, tools) {
+  return []
+}
+
+function sendQuickPrompt(prompt) {
+  if (!_textarea || !prompt) return
+  _textarea.value = prompt
+  autoResizeTextarea()
+  updateSendState()
+  sendMessage()
+}
+
+function focusWechatQrIfPresent(container, images) {
+  return
 }
 
 /** 渲染视频到消息气泡 */
@@ -2059,6 +2203,13 @@ function showCompactionHint(show) {
   } else if (!show && hint) {
     hint.remove()
   }
+}
+
+function autoResizeTextarea() {
+  if (!_textarea) return
+  _textarea.style.height = 'auto'
+  const nextHeight = Math.min(Math.max(_textarea.scrollHeight, 44), 220)
+  _textarea.style.height = `${nextHeight}px`
 }
 
 function scrollToBottom(force = false) {

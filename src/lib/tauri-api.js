@@ -10,6 +10,7 @@ const WEB_ONLY_CMDS = new Set([
   'instance_list', 'instance_add', 'instance_remove', 'instance_set_active',
   'instance_health_check', 'instance_health_all',
   'get_deploy_mode',
+  'get_session_skills_snapshot',
 ])
 
 // 预加载 Tauri invoke，避免每次 API 调用都做动态 import
@@ -216,15 +217,17 @@ export const api = {
 
   // 消息渠道管理
   readPlatformConfig: (platform) => invoke('read_platform_config', { platform }),
-  saveMessagingPlatform: (platform, form, accountId) => { invalidate('list_configured_platforms', 'read_platform_config'); return invoke('save_messaging_platform', { platform, form, accountId: accountId || null }) },
-  removeMessagingPlatform: (platform) => { invalidate('list_configured_platforms', 'read_platform_config'); return invoke('remove_messaging_platform', { platform }) },
-  toggleMessagingPlatform: (platform, enabled) => { invalidate('list_configured_platforms', 'read_openclaw_config', 'read_platform_config'); return invoke('toggle_messaging_platform', { platform, enabled }) },
+  saveMessagingPlatform: (platform, form, accountId) => { invalidate('list_configured_platforms', 'read_platform_config', 'get_channel_runtime_status'); return invoke('save_messaging_platform', { platform, form, accountId: accountId || null }) },
+  removeMessagingPlatform: (platform) => { invalidate('list_configured_platforms', 'read_platform_config', 'get_channel_runtime_status'); return invoke('remove_messaging_platform', { platform }) },
+  toggleMessagingPlatform: (platform, enabled) => { invalidate('list_configured_platforms', 'read_openclaw_config', 'read_platform_config', 'get_channel_runtime_status'); return invoke('toggle_messaging_platform', { platform, enabled }) },
   verifyBotToken: (platform, form) => invoke('verify_bot_token', { platform, form }),
   listConfiguredPlatforms: () => cachedInvoke('list_configured_platforms', {}, 5000),
   getChannelPluginStatus: (pluginId) => invoke('get_channel_plugin_status', { pluginId }),
+  getChannelRuntimeStatus: (platform) => cachedInvoke('get_channel_runtime_status', { platform }, 5000),
+  startWechatQrLogin: (force = false) => invoke('start_wechat_qr_login', { force }),
+  waitWechatQrLogin: (sessionKey, timeoutMs = 1500) => invoke('wait_wechat_qr_login', { sessionKey, timeoutMs }),
   installQqbotPlugin: () => invoke('install_qqbot_plugin'),
   installChannelPlugin: (packageName, pluginId) => invoke('install_channel_plugin', { packageName, pluginId }),
-  installMcpPlugin: (packageName, serverId) => invoke('install_mcp_plugin', { packageName, serverId }),
 
   /**
    * Web 模式流式安装插件（SSE），返回 { close() } 句柄
@@ -272,46 +275,6 @@ export const api = {
     }).catch(e => {
       if (onError) onError({ message: e.message })
     })
-    return { close() { ctrl.abort() } }
-  },
-
-  /** Web 模式流式安装 MCP 插件（SSE） */
-  installMcpPluginStream: (packageName, serverId, { onLog, onProgress, onDone, onError } = {}) => {
-    if (isTauri) return { close() {} }
-    const ctrl = new AbortController()
-    fetch('/__api/mcp_plugin_install_stream', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ packageName, serverId }),
-      signal: ctrl.signal,
-    }).then(resp => {
-      const reader = resp.body.getReader()
-      const decoder = new TextDecoder()
-      let buf = ''
-      function pump() {
-        reader.read().then(({ done, value }) => {
-          if (done) return
-          buf += decoder.decode(value, { stream: true })
-          const lines = buf.split('\n')
-          buf = lines.pop() || ''
-          let currentEvent = 'message'
-          for (const line of lines) {
-            if (line.startsWith('event: ')) currentEvent = line.slice(7).trim()
-            else if (line.startsWith('data: ')) {
-              try {
-                const data = JSON.parse(line.slice(6))
-                if (currentEvent === 'log' && onLog) onLog(data)
-                else if (currentEvent === 'progress' && onProgress) onProgress(data)
-                else if (currentEvent === 'done' && onDone) onDone(data)
-                else if (currentEvent === 'error' && onError) onError(data)
-              } catch {}
-            }
-          }
-          pump()
-        }).catch(() => {})
-      }
-      pump()
-    }).catch(e => { if (onError) onError({ message: e.message }) })
     return { close() { ctrl.abort() } }
   },
 
@@ -368,6 +331,7 @@ export const api = {
   skillsList: () => invoke('skills_list'),
   skillsInfo: (name) => invoke('skills_info', { name }),
   skillsCheck: () => invoke('skills_check'),
+  getSessionSkillsSnapshot: (sessionKey) => invoke('get_session_skills_snapshot', { sessionKey }),
   skillsInstallDep: (kind, spec) => invoke('skills_install_dep', { kind, spec }),
   skillsSkillHubCheck: () => invoke('skills_skillhub_check'),
   skillsSkillHubSetup: (cliOnly = true) => invoke('skills_skillhub_setup', { cliOnly }),

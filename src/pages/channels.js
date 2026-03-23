@@ -6,6 +6,10 @@ import { api } from '../lib/tauri-api.js'
 import { toast } from '../components/toast.js'
 import { showContentModal, showConfirm } from '../components/modal.js'
 import { icon } from '../lib/icons.js'
+import QRCode from 'qrcode'
+
+const PLUGIN_STATUS_TTL = 30000
+const _pluginStatusCache = new Map()
 
 // ── 渠道注册表：定义每个支持的消息渠道的元数据和表单规格 ──
 
@@ -117,18 +121,17 @@ const PLATFORM_REGISTRY = {
   wechat: {
     label: '微信',
     iconName: 'smartphone',
-    desc: '基于 MCP 协议的微信机器人，扫码即可接入微信对话',
+    desc: '腾讯官方原生微信插件，支持扫码登录、文本/图片/文件收发',
     guide: [
-      '点击「安装」，ClawPanel 会自动安装 mcp-wechat-server 并配置 MCP',
-      '安装完成后，通过 AI 助手调用 login_qrcode 生成二维码',
+      '点击「安装」，ClawPanel 会自动安装腾讯官方微信插件 <code>@tencent-weixin/openclaw-weixin</code>',
+      '安装完成后，使用终端命令 <code>openclaw channels login --channel openclaw-weixin</code> 拉起二维码登录',
       '使用手机微信扫码绑定，绑定成功后即可通过微信与 AI 对话',
-      '支持消息轮询、打字状态显示、文本消息收发',
+      '原生插件支持文本、图片、视频、文件消息收发',
     ],
-    guideFooter: '<div style="margin-top:8px;font-size:var(--font-size-xs);color:var(--text-tertiary)">基于 <a href="https://github.com/Howardzhangdqs/mcp-wechat-server" target="_blank" style="color:var(--accent);text-decoration:underline">mcp-wechat-server</a>（MCP 协议），需要 Bun 或 Node.js 运行环境</div>',
+    guideFooter: '<div style="margin-top:8px;font-size:var(--font-size-xs);color:var(--text-tertiary)">当前使用腾讯官方原生微信插件方案。登录命令：<code>openclaw channels login --channel openclaw-weixin</code></div>',
     fields: [],
-    pluginRequired: 'mcp-wechat-server',
-    pluginId: 'mcp-wechat-server',
-    mcpServer: true,
+    pluginRequired: '@tencent-weixin/openclaw-weixin@latest',
+    pluginId: 'openclaw-weixin',
   },
   whatsapp: {
     label: 'WhatsApp',
@@ -364,35 +367,56 @@ export function cleanup() {}
 // ── 数据加载 ──
 
 async function loadPlatforms(page, state) {
-  try {
-    const list = await api.listConfiguredPlatforms()
-    state.configured = Array.isArray(list) ? list : []
-  } catch (e) {
-    toast('加载平台列表失败: ' + e, 'error')
+  state.pluginStatus = {}
+  Object.entries(PLATFORM_REGISTRY).forEach(([pid]) => {
+    const cached = _pluginStatusCache.get(pid)
+    if (cached && Date.now() - cached.ts < PLUGIN_STATUS_TTL) state.pluginStatus[pid] = cached.value
+  })
+
+  const [listRes, runtimeRes, configRes] = await Promise.allSettled([
+    api.listConfiguredPlatforms(),
+    api.getChannelRuntimeStatus('wechat'),
+    api.readOpenclawConfig(),
+  ])
+
+  if (listRes.status === 'fulfilled') state.configured = Array.isArray(listRes.value) ? listRes.value : []
+  else {
+    toast('加载平台列表失败: ' + listRes.reason, 'error')
     state.configured = []
   }
-  // 加载 bindings 信息
-  try {
-    const config = await api.readOpenclawConfig()
-    state.bindings = Array.isArray(config?.bindings) ? config.bindings : []
-  } catch { state.bindings = [] }
 
-  // 加载所有需要插件的渠道的安装状态
-  state.pluginStatus = {}
-  const pluginChecks = Object.entries(PLATFORM_REGISTRY)
-    .filter(([, reg]) => reg.pluginRequired)
-    .map(async ([pid, reg]) => {
-      const pluginId = reg.pluginId || pid
-      try {
-        const status = await api.getChannelPluginStatus(pluginId)
-        state.pluginStatus[pid] = { installed: !!status?.installed, builtin: !!status?.builtin }
-      } catch {
-        state.pluginStatus[pid] = { installed: false, builtin: false }
-      }
-    })
-  await Promise.allSettled(pluginChecks)
+  state.runtimeStatus = {
+    wechat: runtimeRes.status === 'fulfilled' ? runtimeRes.value : null,
+  }
+  state.bindings = configRes.status === 'fulfilled' && Array.isArray(configRes.value?.bindings) ? configRes.value.bindings : []
 
   renderConfigured(page, state)
+  renderAvailable(page, state)
+  hydratePluginStatuses(page, state).catch(err => console.warn('[channels] hydrate plugin status failed:', err))
+}
+
+async function hydratePluginStatuses(page, state, { force = false } = {}) {
+  const targets = Object.entries(PLATFORM_REGISTRY).filter(([, reg]) => reg.pluginRequired)
+  const tasks = targets.map(async ([pid, reg]) => {
+    const cached = _pluginStatusCache.get(pid)
+    if (!force && cached && Date.now() - cached.ts < PLUGIN_STATUS_TTL) {
+      state.pluginStatus[pid] = cached.value
+      return
+    }
+    const pluginId = reg.pluginId || pid
+    try {
+      const status = await api.getChannelPluginStatus(pluginId)
+      const next = { installed: !!status?.installed, builtin: !!status?.builtin }
+      _pluginStatusCache.set(pid, { ts: Date.now(), value: next })
+      state.pluginStatus[pid] = next
+    } catch {
+      const next = { installed: false, builtin: false }
+      _pluginStatusCache.set(pid, { ts: Date.now(), value: next })
+      state.pluginStatus[pid] = next
+    }
+  })
+  await Promise.allSettled(tasks)
+  if (!page.isConnected) return
   renderAvailable(page, state)
 }
 
@@ -413,6 +437,7 @@ function renderConfigured(page, state) {
           const reg = PLATFORM_REGISTRY[p.id]
           const label = reg?.label || p.id
           const ic = icon(reg?.iconName || 'radio', 22)
+          const runtime = state.runtimeStatus?.[p.id] || null
           const channelKey = getChannelBindingKey(p.id)
           const allBindings = (state.bindings || []).filter(b => b.match?.channel === channelKey)
           const boundAgents = allBindings.map(b => b.agentId || 'main')
@@ -421,6 +446,12 @@ function renderConfigured(page, state) {
           const agentBadges = showAll ? boundAgents.map(a =>
             `<span style="font-size:var(--font-size-xs);color:var(--accent);background:var(--accent-muted);padding:1px 6px;border-radius:10px;white-space:nowrap">→ ${escapeAttr(a)}</span>`
           ).join(' ') : ''
+          const subStatus = p.id === 'wechat'
+            ? `<div style="margin-top:6px;font-size:var(--font-size-xs);color:var(--text-secondary)">${escapeAttr(runtime?.message || (runtime?.connected ? '微信已接入' : '微信状态未知'))}${runtime?.accountCount ? ` · 已登录 ${Number(runtime.accountCount || 0)} 个账号` : ''}</div>`
+            : ''
+          const runtimeOnlyHint = p.runtimeOnly
+            ? `<div style="margin-top:4px;font-size:var(--font-size-xs);color:var(--accent)">当前为运行态接入，状态来自腾讯官方原生微信插件</div>`
+            : ''
           return `
             <div class="platform-card ${p.enabled ? 'active' : 'inactive'}" data-pid="${p.id}">
               <div class="platform-card-header">
@@ -429,6 +460,8 @@ function renderConfigured(page, state) {
                 ${agentBadges}
                 <span class="platform-status-dot ${p.enabled ? 'on' : 'off'}"></span>
               </div>
+              ${subStatus}
+              ${runtimeOnlyHint}
               <div class="platform-card-actions">
                 <button class="btn btn-sm btn-secondary" data-action="edit">${icon('edit', 14)} 编辑</button>
                 <button class="btn btn-sm btn-secondary" data-action="toggle">${p.enabled ? icon('pause', 14) + ' 禁用' : icon('play', 14) + ' 启用'}</button>
@@ -444,8 +477,21 @@ function renderConfigured(page, state) {
   // 绑定事件
   el.querySelectorAll('.platform-card').forEach(card => {
     const pid = card.dataset.pid
-    card.querySelector('[data-action="edit"]').onclick = () => openConfigDialog(pid, page, state)
-    card.querySelector('[data-action="toggle"]').onclick = async () => {
+    card.querySelector('[data-action="edit"]').onclick = async (e) => {
+      const btn = e.currentTarget
+      const prev = btn.innerHTML
+      btn.disabled = true
+      btn.innerHTML = `${icon('loader', 14)} 打开中...`
+      try {
+        await openConfigDialog(pid, page, state)
+      } finally {
+        btn.disabled = false
+        btn.innerHTML = prev
+      }
+    }
+    const toggleBtn = card.querySelector('[data-action="toggle"]')
+    const removeBtn = card.querySelector('[data-action="remove"]')
+    if (toggleBtn) toggleBtn.onclick = async () => {
       const cur = state.configured.find(p => p.id === pid)
       if (!cur) return
       try {
@@ -454,7 +500,7 @@ function renderConfigured(page, state) {
         await loadPlatforms(page, state)
       } catch (e) { toast('操作失败: ' + e, 'error') }
     }
-    card.querySelector('[data-action="remove"]').onclick = async () => {
+    if (removeBtn) removeBtn.onclick = async () => {
       const yes = await showConfirm(`确定移除 ${PLATFORM_REGISTRY[pid]?.label || pid}？配置将被删除。`)
       if (!yes) return
       try {
@@ -475,14 +521,23 @@ function renderAvailable(page, state) {
 
   container.innerHTML = entries.map(([pid, reg]) => {
     const done = configuredIds.has(pid)
+    const runtime = state.runtimeStatus?.[pid] || null
     const needsPlugin = !!reg.pluginRequired
-    const pluginOk = !needsPlugin || state.pluginStatus[pid]?.installed || state.pluginStatus[pid]?.builtin
+    const pluginState = state.pluginStatus[pid]
+    const pluginKnown = !needsPlugin || !!pluginState
+    const pluginOk = !needsPlugin || pluginState?.installed || pluginState?.builtin
 
     let badge = ''
     let actionLabel = ''
-    if (done) {
+    if (done || runtime?.connected) {
       badge = `<span class="channel-badge channel-badge-active">${icon('check', 12)} 已接入</span>`
-      actionLabel = '绑定 Agent'
+      actionLabel = pid === 'wechat' ? '查看接入状态' : '绑定 Agent'
+    } else if (pid === 'wechat' && runtime?.installed) {
+      badge = `<span class="channel-badge channel-badge-installed">${icon('package', 12)} 已安装${runtime?.pendingQr ? ' · 待扫码' : ''}</span>`
+      actionLabel = '查看登录状态'
+    } else if (!pluginKnown) {
+      badge = `<span class="channel-badge channel-badge-builtin">${icon('loader', 12)} 检测中</span>`
+      actionLabel = '加载中'
     } else if (!needsPlugin || pluginOk) {
       badge = needsPlugin
         ? `<span class="channel-badge channel-badge-installed">${icon('package', 12)} 已安装</span>`
@@ -509,12 +564,16 @@ function renderAvailable(page, state) {
   container.querySelectorAll('.platform-pick').forEach(btn => {
     const pid = btn.dataset.pid
     const done = configuredIds.has(pid)
+    const runtime = state.runtimeStatus?.[pid] || null
     const reg = PLATFORM_REGISTRY[pid]
     const needsPlugin = !!reg?.pluginRequired
-    const pluginOk = !needsPlugin || state.pluginStatus[pid]?.installed || state.pluginStatus[pid]?.builtin
+    const pluginState = state.pluginStatus[pid]
+    const pluginKnown = !needsPlugin || !!pluginState
+    const pluginOk = !needsPlugin || pluginState?.installed || pluginState?.builtin
 
     btn.onclick = () => {
-      if (done) {
+      if (!pluginKnown && !done && !runtime?.connected) return
+      if (done || runtime?.connected || (pid === 'wechat' && runtime?.installed)) {
         openBindAgentDialog(pid, page, state)
       } else if (!pluginOk) {
         openInstallDialog(pid, page, state)
@@ -530,6 +589,10 @@ function renderAvailable(page, state) {
 async function openBindAgentDialog(pid, page, state) {
   const reg = PLATFORM_REGISTRY[pid]
   if (!reg) return
+  if (pid === 'wechat') {
+    openConfigDialog(pid, page, state)
+    return
+  }
   let agents = []
   try { agents = await api.listAgents() } catch {}
   if (!Array.isArray(agents)) agents = []
@@ -665,36 +728,7 @@ async function openInstallDialog(pid, page, state) {
     let success = false
     const isTauriEnv = !!window.__TAURI_INTERNALS__
 
-    // MCP 类型插件：走全局 npm install + mcp.json 配置
-    if (reg.mcpServer) {
-      if (isTauriEnv) {
-        try {
-          appendLog(`正在全局安装 ${pluginPackage} ...`)
-          updateProgress(20)
-          await api.installMcpPlugin(pluginPackage, pid)
-          updateProgress(100)
-          appendLog('安装完成，MCP 配置已写入')
-          success = true
-        } catch (e) {
-          appendLog('安装失败: ' + (e.message || e))
-        }
-      } else {
-        try {
-          await new Promise((resolve, reject) => {
-            const handle = api.installMcpPluginStream(pluginPackage, pid, {
-              onLog: (line) => appendLog(line),
-              onProgress: (v) => updateProgress(v),
-              onDone: () => resolve(),
-              onError: (err) => reject(new Error(err.message || '安装失败')),
-            })
-            setTimeout(() => { handle.close(); reject(new Error('安装超时')) }, 120000)
-          })
-          success = true
-        } catch (e) {
-          appendLog('安装失败: ' + e.message)
-        }
-      }
-    } else if (isTauriEnv) {
+    if (isTauriEnv) {
       let unlistenLog, unlistenProgress
       try {
         const { listen } = await import('@tauri-apps/api/event')
@@ -737,36 +771,20 @@ async function openInstallDialog(pid, page, state) {
 
       if (verified) {
         state.pluginStatus[pid] = { installed: true, builtin: false }
-
-        // MCP 类型插件：自动写入 mcp.json 配置
-        if (reg.mcpServer) {
-          try {
-            const mcpCfg = await api.readMcpConfig() || {}
-            if (!mcpCfg.mcpServers) mcpCfg.mcpServers = {}
-            if (!mcpCfg.mcpServers[pid]) {
-              mcpCfg.mcpServers[pid] = { command: 'npx', args: [pluginPackage] }
-              await api.writeMcpConfig(mcpCfg)
-              appendLog('已自动添加 MCP 服务配置')
-            }
-          } catch (e) {
-            appendLog('MCP 配置写入失败: ' + e)
-          }
-        }
+        const hasConfigFields = Array.isArray(reg.fields) && reg.fields.length > 0
 
         progressArea.innerHTML = `
           <div style="background:var(--success-muted);color:var(--success);padding:12px 14px;border-radius:var(--radius-md);font-size:var(--font-size-sm);display:flex;align-items:center;gap:8px">
             ${icon('check', 16)} 安装成功！
           </div>
         `
-        btnInstall.textContent = '继续配置'
+        await loadPlatforms(page, state)
+        btnInstall.textContent = pid === 'wechat' ? '查看登录指引' : (hasConfigFields ? '继续配置' : '完成')
         btnInstall.disabled = false
         btnInstall.className = 'btn btn-primary'
         btnInstall.onclick = () => {
           modal.close?.() || modal.remove?.()
-          // 微信无需额外配置字段，直接刷新列表
-          if (reg.fields.length === 0) {
-            loadPlatforms(page, state)
-          } else {
+          if (pid === 'wechat' || hasConfigFields) {
             openConfigDialog(pid, page, state)
           }
         }
@@ -802,22 +820,19 @@ async function openConfigDialog(pid, page, state) {
   let isEdit = false
   let agents = []
   let currentBinding = ''
+  const runtime = state.runtimeStatus?.[pid] || null
   try {
-    const res = await api.readPlatformConfig(pid)
-    if (res?.values) {
-      existing = res.values
-    }
-    if (res?.exists) {
-      isEdit = true
-    }
+    const [platformRes, agentList] = await Promise.all([
+      api.readPlatformConfig(pid).catch(() => null),
+      api.listAgents().catch(() => []),
+    ])
+    if (platformRes?.values) existing = platformRes.values
+    if (platformRes?.exists) isEdit = true
+    agents = Array.isArray(agentList) ? agentList : []
   } catch {}
-  // 加载 Agent 列表和当前 binding
+
   try {
-    agents = await api.listAgents()
-  } catch {}
-  try {
-    const config = await api.readOpenclawConfig()
-    const bindings = config?.bindings || []
+    const bindings = Array.isArray(state.bindings) ? state.bindings : []
     const channelKey = getChannelBindingKey(pid)
     const found = bindings.find(b => b.match?.channel === channelKey)
     if (found) currentBinding = found.agentId || ''
@@ -850,13 +865,12 @@ async function openConfigDialog(pid, page, state) {
     </div>
   `
 
-  // 飞书插件版本检测：根据已安装的插件自动选择
+  // 飞书编辑弹窗优先复用已保存/本地选择，避免每次打开都额外探测插件状态
   if (pid === 'feishu' && !existing.pluginVersion) {
-    try {
-      const officialStatus = await api.getChannelPluginStatus('openclaw-lark') || await api.getChannelPluginStatus('feishu-openclaw-plugin')
-      if (officialStatus?.installed) existing.pluginVersion = 'official'
-      else existing.pluginVersion = localStorage.getItem('clawpanel-feishu-plugin-version') || 'builtin'
-    } catch { existing.pluginVersion = 'builtin' }
+    existing.pluginVersion = localStorage.getItem('clawpanel-feishu-plugin-version') || 'builtin'
+  }
+  if (pid === 'wechat' && runtime && (runtime.connected || runtime.installed || runtime.pendingQr)) {
+    isEdit = true
   }
 
   const fieldsHtml = reg.fields.map((f, i) => {
@@ -893,6 +907,31 @@ async function openConfigDialog(pid, page, state) {
       ${reg.guideFooter || ''}
     </details>
   ` : ''
+  const runtimeStatusHtml = pid === 'wechat' ? `
+    <div style="background:${runtime?.connected ? 'var(--success-muted)' : 'var(--bg-tertiary)'};color:${runtime?.connected ? 'var(--success)' : 'var(--text-secondary)'};padding:10px 14px;border-radius:var(--radius-md);font-size:var(--font-size-sm);margin-bottom:var(--space-md)">
+      ${icon(runtime?.connected ? 'check' : 'info', 14)}
+      ${escapeAttr(runtime?.message || '微信状态未知')}
+      ${(runtime?.botId || runtime?.userId) ? `<div style="margin-top:6px;font-size:12px;color:var(--text-secondary)">Bot: ${escapeAttr(runtime?.botId || '-')}<br>User: ${escapeAttr(runtime?.userId || '-')}</div>` : ''}
+      ${runtime?.loginCommand ? `<div style="margin-top:6px;font-size:12px;color:var(--text-secondary)">扫码命令: <code>${escapeAttr(runtime.loginCommand)}</code></div>` : ''}
+      ${runtime?.pluginError ? `<div style="margin-top:6px;font-size:12px;color:var(--error)">插件错误: ${escapeAttr(runtime.pluginError)}</div>` : ''}
+    </div>
+  ` : ''
+  const wechatQrHtml = pid === 'wechat' ? `
+    <div id="wechat-qr-panel" style="background:var(--bg-tertiary);padding:12px 14px;border-radius:var(--radius-md);margin-bottom:var(--space-md)">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px">
+        <div style="font-weight:600;font-size:var(--font-size-sm)">扫码绑定微信</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button type="button" class="btn btn-sm btn-primary" id="btn-wechat-start-qr">${runtime?.connected ? '重新绑定' : '生成二维码'}</button>
+          <button type="button" class="btn btn-sm btn-secondary" id="btn-wechat-check-qr" disabled>检查状态</button>
+        </div>
+      </div>
+      <div id="wechat-qr-status" style="font-size:var(--font-size-xs);color:var(--text-secondary);line-height:1.7">安装插件后可以直接在这里生成二维码并扫码绑定，不需要再手敲终端命令。</div>
+      <div id="wechat-qr-view" style="display:none;margin-top:12px;text-align:center">
+        <img id="wechat-qr-image" alt="微信登录二维码" style="width:260px;max-width:100%;border-radius:16px;border:1px solid var(--border-primary);background:#fff;padding:10px">
+        <div id="wechat-qr-link" style="margin-top:8px;font-size:12px;color:var(--text-secondary);word-break:break-all"></div>
+      </div>
+    </div>
+  ` : ''
 
   const pairingHtml = reg.pairingChannel ? `
     <div style="margin-top:var(--space-md);padding:12px 14px;background:var(--bg-tertiary);border-radius:var(--radius-md)">
@@ -908,6 +947,8 @@ async function openConfigDialog(pid, page, state) {
   ` : ''
 
   const content = `
+    ${runtimeStatusHtml}
+    ${wechatQrHtml}
     ${guideHtml}
     ${!isEdit && (existing.gatewayToken || existing.gatewayPassword) ? `<div style="background:var(--bg-tertiary);color:var(--text-secondary);padding:8px 14px;border-radius:var(--radius-md);font-size:var(--font-size-sm);margin-bottom:var(--space-md)">已从当前 Gateway 鉴权配置中自动带出 ${existing.gatewayToken ? 'Token' : 'Password'}，通常无需手填</div>` : ''}
     ${isEdit ? `<div style="background:var(--accent-muted);color:var(--accent);padding:8px 14px;border-radius:var(--radius-md);font-size:var(--font-size-sm);margin-bottom:var(--space-md)">当前已有配置，修改后点击保存即可覆盖</div>` : ''}
@@ -969,6 +1010,126 @@ async function openConfigDialog(pid, page, state) {
   const pairingResultEl = modal.querySelector('#pairing-result')
   const btnPairingList = modal.querySelector('#btn-pairing-list')
   const btnPairingApprove = modal.querySelector('#btn-pairing-approve')
+  const btnWechatStartQr = modal.querySelector('#btn-wechat-start-qr')
+  const btnWechatCheckQr = modal.querySelector('#btn-wechat-check-qr')
+  const wechatQrStatusEl = modal.querySelector('#wechat-qr-status')
+  const wechatQrViewEl = modal.querySelector('#wechat-qr-view')
+  const wechatQrImageEl = modal.querySelector('#wechat-qr-image')
+  const wechatQrLinkEl = modal.querySelector('#wechat-qr-link')
+  let wechatQrSessionKey = ''
+  let wechatQrPolling = false
+  let wechatQrStopped = false
+
+  const setWechatQrStatus = (text, tone = '') => {
+    if (!wechatQrStatusEl) return
+    const color = tone === 'error'
+      ? 'var(--error)'
+      : tone === 'success'
+        ? 'var(--success)'
+        : tone === 'accent'
+          ? 'var(--accent)'
+          : 'var(--text-secondary)'
+    wechatQrStatusEl.innerHTML = `<span style="color:${color}">${escapeAttr(text)}</span>`
+  }
+  const showWechatQr = async (qrUrl) => {
+    if (!wechatQrViewEl || !wechatQrImageEl || !wechatQrLinkEl) return
+    if (!qrUrl) {
+      wechatQrViewEl.style.display = 'none'
+      wechatQrImageEl.removeAttribute('src')
+      wechatQrLinkEl.innerHTML = ''
+      return
+    }
+    let renderedSrc = qrUrl
+    try {
+      renderedSrc = qrUrl.startsWith('data:image/')
+        ? qrUrl
+        : await QRCode.toDataURL(qrUrl, {
+          width: 320,
+          margin: 2,
+          errorCorrectionLevel: 'M',
+        })
+    } catch (e) {
+      console.warn('[channels] render wechat qr failed:', e)
+    }
+    wechatQrViewEl.style.display = 'block'
+    wechatQrImageEl.src = renderedSrc
+    wechatQrLinkEl.innerHTML = `二维码链接：<a href="${escapeAttr(qrUrl)}" target="_blank" style="color:var(--accent);text-decoration:underline">${escapeAttr(qrUrl)}</a>`
+  }
+  const stopWechatQrPolling = () => {
+    wechatQrStopped = true
+    wechatQrPolling = false
+  }
+  const pollWechatQrStatus = async () => {
+    if (wechatQrPolling || wechatQrStopped || !wechatQrSessionKey || !modal.isConnected) return
+    wechatQrPolling = true
+    try {
+      const res = await api.waitWechatQrLogin(wechatQrSessionKey, 1200)
+      if (wechatQrStopped || !modal.isConnected) return
+      if (res?.qrDataUrl) await showWechatQr(res.qrDataUrl)
+      if (res?.message) {
+        const tone = res?.connected ? 'success' : (res?.expired ? 'error' : (res?.scanned ? 'accent' : ''))
+        setWechatQrStatus(res.message, tone)
+      }
+      if (res?.connected) {
+        btnWechatCheckQr && (btnWechatCheckQr.disabled = true)
+        btnWechatStartQr && (btnWechatStartQr.textContent = '重新绑定')
+        toast('微信绑定成功', 'success')
+        await loadPlatforms(page, state)
+        return
+      }
+    } catch (e) {
+      setWechatQrStatus(`扫码状态检查失败: ${String(e)}`, 'error')
+    } finally {
+      wechatQrPolling = false
+    }
+    if (!wechatQrStopped && modal.isConnected && wechatQrSessionKey) {
+      setTimeout(() => { pollWechatQrStatus().catch(() => {}) }, 1500)
+    }
+  }
+
+  if (btnWechatStartQr && pid === 'wechat') {
+    btnWechatStartQr.onclick = async () => {
+      btnWechatStartQr.disabled = true
+      btnWechatCheckQr && (btnWechatCheckQr.disabled = true)
+      btnSave.disabled = true
+      btnVerify.disabled = true
+      btnWechatStartQr.textContent = '生成中...'
+      try {
+        const form = collectForm()
+        const accountId = modal.querySelector('input[name="__accountId"]')?.value?.trim() || null
+        const selectedAgent = modal.querySelector('select[name="__agentBinding"]')?.value || ''
+        await api.saveMessagingPlatform(pid, form, accountId)
+        await saveChannelBinding(pid, selectedAgent, null, accountId)
+        const startRes = await api.startWechatQrLogin(true)
+        wechatQrStopped = false
+        wechatQrSessionKey = startRes?.sessionKey || ''
+        await showWechatQr(startRes?.qrDataUrl || '')
+        setWechatQrStatus(startRes?.message || '二维码已生成，请扫码。', 'accent')
+        btnWechatStartQr.textContent = '刷新二维码'
+        btnWechatCheckQr && (btnWechatCheckQr.disabled = !wechatQrSessionKey)
+        await loadPlatforms(page, state)
+        pollWechatQrStatus().catch(() => {})
+      } catch (e) {
+        setWechatQrStatus(`生成二维码失败: ${String(e)}`, 'error')
+        await showWechatQr('')
+        btnWechatStartQr.textContent = runtime?.connected ? '重新绑定' : '生成二维码'
+      } finally {
+        btnWechatStartQr.disabled = false
+        btnSave.disabled = false
+        btnVerify.disabled = false
+      }
+    }
+  }
+
+  if (btnWechatCheckQr && pid === 'wechat') {
+    btnWechatCheckQr.onclick = () => {
+      if (!wechatQrSessionKey) {
+        toast('请先生成二维码', 'warning')
+        return
+      }
+      pollWechatQrStatus().catch(() => {})
+    }
+  }
 
   if (btnPairingList && pairingResultEl) {
     btnPairingList.onclick = async () => {
@@ -1112,6 +1273,14 @@ async function openConfigDialog(pid, page, state) {
       btnSave.textContent = isEdit ? '保存' : '接入并保存'
     }
   }
+
+  const originalClose = modal.close?.bind(modal)
+  if (originalClose) {
+    modal.close = (...args) => {
+      stopWechatQrPolling()
+      return originalClose(...args)
+    }
+  }
 }
 
 /** 将平台 ID 映射为 openclaw bindings 中的 channel key */
@@ -1122,6 +1291,7 @@ function getChannelBindingKey(pid) {
     discord: 'discord',
     feishu: 'feishu',
     dingtalk: 'dingtalk-connector',
+    wechat: 'openclaw-weixin',
   }
   return map[pid] || pid
 }

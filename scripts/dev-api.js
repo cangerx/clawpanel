@@ -12,12 +12,23 @@ import { fileURLToPath } from 'url'
 import net from 'net'
 import http from 'http'
 import crypto from 'crypto'
+import { Readable } from 'stream'
 const DOCKER_TASK_TIMEOUT_MS = 10 * 60 * 1000
 
 const __dev_dirname = path.dirname(fileURLToPath(import.meta.url))
 const OPENCLAW_DIR = path.join(homedir(), '.openclaw')
 const CONFIG_PATH = path.join(OPENCLAW_DIR, 'openclaw.json')
 const MCP_CONFIG_PATH = path.join(OPENCLAW_DIR, 'mcp.json')
+const MCPORTER_CONFIG_PATH = path.join(OPENCLAW_DIR, 'workspace', 'config', 'mcporter.json')
+const WECHAT_NATIVE_PLUGIN_ID = 'openclaw-weixin'
+const WECHAT_NATIVE_CONFIG_KEY = 'openclaw-weixin'
+const WECHAT_NATIVE_STATE_DIR = path.join(OPENCLAW_DIR, WECHAT_NATIVE_PLUGIN_ID)
+const WECHAT_NATIVE_ACCOUNTS_INDEX_PATH = path.join(WECHAT_NATIVE_STATE_DIR, 'accounts.json')
+const WECHAT_NATIVE_ACCOUNTS_DIR = path.join(WECHAT_NATIVE_STATE_DIR, 'accounts')
+const WECHAT_DEFAULT_BASE_URL = 'https://ilinkai.weixin.qq.com'
+const WECHAT_QR_POLL_TIMEOUT_MS = 35000
+const WECHAT_QR_TTL_MS = 5 * 60_000
+const WECHAT_QR_REFRESH_MAX = 3
 const LOGS_DIR = path.join(OPENCLAW_DIR, 'logs')
 const BACKUPS_DIR = path.join(OPENCLAW_DIR, 'backups')
 const DEVICE_KEY_FILE = path.join(OPENCLAW_DIR, 'clawpanel-device-key.json')
@@ -54,7 +65,7 @@ const GIT_HTTPS_REWRITES = [
 const _taskStore = new Map()   // taskId → task object
 const MAX_TASK_HISTORY = 50
 const _agentScriptSyncCache = new Map() // `${endpoint}:${containerId}` → 脚本 hash
-
+const _wechatQrLogins = new Map()
 function createTask(containerId, containerName, nodeId, message) {
   const id = `task-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
   const task = {
@@ -77,6 +88,256 @@ function createTask(containerId, containerName, nodeId, message) {
     oldest.forEach(k => _taskStore.delete(k))
   }
   return task
+}
+
+function readJsonFileSafe(filePath, fallback = {}) {
+  if (!fs.existsSync(filePath)) return fallback
+  try {
+    return JSON.parse(fs.readFileSync(filePath, 'utf8'))
+  } catch {
+    return fallback
+  }
+}
+
+function getImageMimeFromExt(filePath) {
+  const ext = path.extname(filePath).toLowerCase()
+  if (ext === '.png') return 'image/png'
+  if (ext === '.gif') return 'image/gif'
+  if (ext === '.webp') return 'image/webp'
+  if (ext === '.svg') return 'image/svg+xml'
+  return 'image/jpeg'
+}
+
+function getPlatformConfigKey(pid) {
+  return pid === 'wechat' ? WECHAT_NATIVE_CONFIG_KEY : pid
+}
+
+function normalizeWechatAccountId(value) {
+  return String(value || '')
+    .trim()
+    .replace(/[^a-zA-Z0-9._-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+}
+
+function resolvePluginDir(pluginId) {
+  const pid = String(pluginId || '').trim()
+  if (!pid) return null
+  const candidates = [
+    path.join(OPENCLAW_DIR, 'plugins', 'node_modules', pid),
+    path.join(OPENCLAW_DIR, 'extensions', pid),
+  ]
+  for (const dir of candidates) {
+    if (fs.existsSync(path.join(dir, 'package.json')) || fs.existsSync(path.join(dir, 'openclaw.plugin.json'))) {
+      return dir
+    }
+  }
+  return candidates[0]
+}
+
+function isPluginInstalledOnDisk(pluginId) {
+  const dir = resolvePluginDir(pluginId)
+  if (!dir) return false
+  return fs.existsSync(path.join(dir, 'package.json')) || fs.existsSync(path.join(dir, 'openclaw.plugin.json'))
+}
+
+function ensurePluginEnabled(pluginId) {
+  if (!fs.existsSync(CONFIG_PATH)) return
+  const cfg = readJsonFileSafe(CONFIG_PATH, {})
+  if (!cfg.plugins || typeof cfg.plugins !== 'object') cfg.plugins = {}
+  if (!Array.isArray(cfg.plugins.allow)) cfg.plugins.allow = []
+  if (!cfg.plugins.allow.includes(pluginId)) cfg.plugins.allow.push(pluginId)
+  if (!cfg.plugins.entries || typeof cfg.plugins.entries !== 'object') cfg.plugins.entries = {}
+  if (!cfg.plugins.entries[pluginId] || typeof cfg.plugins.entries[pluginId] !== 'object') cfg.plugins.entries[pluginId] = {}
+  cfg.plugins.entries[pluginId].enabled = true
+  fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2))
+}
+
+function ensureWeixinNativeDeps() {
+  const pluginDir = resolvePluginDir(WECHAT_NATIVE_PLUGIN_ID)
+  if (!pluginDir || !fs.existsSync(path.join(pluginDir, 'package.json'))) return
+  if (fs.existsSync(path.join(pluginDir, 'node_modules', 'zod'))) return
+  const npmCmd = isWindows ? 'npm.cmd' : 'npm'
+  execSync(`${npmCmd} install --omit=dev`, {
+    cwd: pluginDir,
+    timeout: 120000,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
+}
+
+function postInstallChannelPlugin(pluginId) {
+  if (pluginId === WECHAT_NATIVE_PLUGIN_ID) {
+    ensurePluginEnabled(pluginId)
+    ensureWeixinNativeDeps()
+  }
+}
+
+function resolveSafeLocalImage(filePath) {
+  if (!filePath || typeof filePath !== 'string') return null
+  const resolved = path.resolve(filePath)
+  const allowedRoots = [OPENCLAW_DIR]
+  const allowed = allowedRoots.some(root => resolved === root || resolved.startsWith(root + path.sep))
+  if (!allowed) return null
+  if (!fs.existsSync(resolved)) return null
+  const stat = fs.statSync(resolved)
+  if (!stat.isFile()) return null
+  return resolved
+}
+
+function getWechatRuntimeStatus() {
+  const cfg = fs.existsSync(CONFIG_PATH) ? readJsonFileSafe(CONFIG_PATH, {}) : {}
+  const configuredInOpenclaw = !!cfg?.channels?.[WECHAT_NATIVE_CONFIG_KEY]
+  const pluginDir = resolvePluginDir(WECHAT_NATIVE_PLUGIN_ID)
+  const pluginInstalled = !!pluginDir && isPluginInstalledOnDisk(WECHAT_NATIVE_PLUGIN_ID)
+  const runtimeDepsOk = !!pluginDir && fs.existsSync(path.join(pluginDir, 'node_modules', 'zod'))
+  let indexedAccounts = []
+  try {
+    const raw = readJsonFileSafe(WECHAT_NATIVE_ACCOUNTS_INDEX_PATH, [])
+    indexedAccounts = Array.isArray(raw) ? raw.map(v => String(v || '').trim()).filter(Boolean) : []
+  } catch {}
+  if (!indexedAccounts.length && fs.existsSync(WECHAT_NATIVE_ACCOUNTS_DIR)) {
+    try {
+      indexedAccounts = fs.readdirSync(WECHAT_NATIVE_ACCOUNTS_DIR)
+        .filter(name => name.endsWith('.json'))
+        .map(name => name.replace(/\.json$/i, '').trim())
+        .filter(Boolean)
+    } catch {}
+  }
+  const firstAccountId = indexedAccounts[0] || ''
+  let firstAccount = {}
+  if (firstAccountId) {
+    try {
+      firstAccount = readJsonFileSafe(path.join(WECHAT_NATIVE_ACCOUNTS_DIR, `${firstAccountId}.json`), {})
+    } catch {}
+  }
+
+  const result = {
+    platform: 'wechat',
+    installed: pluginInstalled,
+    configuredInOpenclaw,
+    accountDetected: indexedAccounts.length > 0,
+    connected: !!(firstAccountId && firstAccount?.token),
+    pendingQr: false,
+    botId: firstAccountId,
+    userId: String(firstAccount?.userId || '').trim(),
+    savedAt: firstAccount?.savedAt ? Date.parse(firstAccount.savedAt) || null : null,
+    accountCount: indexedAccounts.length,
+    loginCommand: 'openclaw channels login --channel openclaw-weixin',
+    pluginError: runtimeDepsOk ? '' : (pluginInstalled ? '插件运行依赖缺失，请重新安装或补装依赖' : ''),
+    message: '',
+  }
+  if (result.connected) result.message = '微信已通过腾讯官方原生插件登录并接入。'
+  else if (result.installed && configuredInOpenclaw) result.message = '微信原生插件已配置，尚未完成扫码登录。'
+  else if (result.installed) result.message = '微信原生插件已安装，保存配置后即可扫码登录。'
+  else result.message = '微信原生插件尚未安装。'
+
+  return result
+}
+
+function getWechatChannelConfig() {
+  const cfg = fs.existsSync(CONFIG_PATH) ? readJsonFileSafe(CONFIG_PATH, {}) : {}
+  const section = cfg?.channels?.[WECHAT_NATIVE_CONFIG_KEY]
+  return section && typeof section === 'object' ? section : {}
+}
+
+function getWechatBaseUrl() {
+  const section = getWechatChannelConfig()
+  return String(section?.baseUrl || WECHAT_DEFAULT_BASE_URL).trim() || WECHAT_DEFAULT_BASE_URL
+}
+
+function getWechatRouteTag(accountId = '') {
+  const section = getWechatChannelConfig()
+  const accountKey = String(accountId || '').trim()
+  const accountTag = accountKey && section?.accounts?.[accountKey]?.routeTag
+  if (accountTag !== undefined && accountTag !== null && String(accountTag).trim()) return String(accountTag).trim()
+  if (section?.routeTag !== undefined && section?.routeTag !== null && String(section.routeTag).trim()) return String(section.routeTag).trim()
+  return ''
+}
+
+async function fetchWechatQrCode(apiBaseUrl, routeTag = '') {
+  const base = apiBaseUrl.endsWith('/') ? apiBaseUrl : `${apiBaseUrl}/`
+  const url = new URL('ilink/bot/get_bot_qrcode?bot_type=3', base)
+  const headers = routeTag ? { SKRouteTag: routeTag } : {}
+  const resp = await fetch(url.toString(), { headers })
+  if (!resp.ok) {
+    const body = await resp.text().catch(() => '')
+    throw new Error(`获取二维码失败: HTTP ${resp.status}${body ? ` ${body.slice(0, 120)}` : ''}`)
+  }
+  const data = await resp.json()
+  if (!data?.qrcode || !data?.qrcode_img_content) throw new Error('微信服务未返回二维码内容')
+  return {
+    qrcode: String(data.qrcode || '').trim(),
+    qrcodeUrl: String(data.qrcode_img_content || '').trim(),
+  }
+}
+
+async function pollWechatQrStatus(apiBaseUrl, qrcode, routeTag = '') {
+  const base = apiBaseUrl.endsWith('/') ? apiBaseUrl : `${apiBaseUrl}/`
+  const url = new URL(`ilink/bot/get_qrcode_status?qrcode=${encodeURIComponent(qrcode)}`, base)
+  const headers = { 'iLink-App-ClientVersion': '1' }
+  if (routeTag) headers.SKRouteTag = routeTag
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), WECHAT_QR_POLL_TIMEOUT_MS)
+  try {
+    const resp = await fetch(url.toString(), { headers, signal: controller.signal })
+    clearTimeout(timer)
+    const rawText = await resp.text()
+    if (!resp.ok) throw new Error(`轮询二维码状态失败: HTTP ${resp.status}${rawText ? ` ${rawText.slice(0, 120)}` : ''}`)
+    return JSON.parse(rawText)
+  } catch (err) {
+    clearTimeout(timer)
+    if (err?.name === 'AbortError') return { status: 'wait' }
+    throw err
+  }
+}
+
+function saveWechatAccountData(accountId, { token, baseUrl, userId }) {
+  const normalizedId = normalizeWechatAccountId(accountId)
+  if (!normalizedId) throw new Error('微信账号 ID 无效')
+  fs.mkdirSync(WECHAT_NATIVE_ACCOUNTS_DIR, { recursive: true })
+  const filePath = path.join(WECHAT_NATIVE_ACCOUNTS_DIR, `${normalizedId}.json`)
+  fs.writeFileSync(filePath, JSON.stringify({
+    token: String(token || '').trim(),
+    savedAt: new Date().toISOString(),
+    ...(baseUrl ? { baseUrl: String(baseUrl).trim() } : {}),
+    ...(userId ? { userId: String(userId).trim() } : {}),
+  }, null, 2))
+  try { fs.chmodSync(filePath, 0o600) } catch {}
+  const indexed = Array.isArray(readJsonFileSafe(WECHAT_NATIVE_ACCOUNTS_INDEX_PATH, []))
+    ? readJsonFileSafe(WECHAT_NATIVE_ACCOUNTS_INDEX_PATH, []).map(v => String(v || '').trim()).filter(Boolean)
+    : []
+  if (!indexed.includes(normalizedId)) {
+    fs.mkdirSync(path.dirname(WECHAT_NATIVE_ACCOUNTS_INDEX_PATH), { recursive: true })
+    fs.writeFileSync(WECHAT_NATIVE_ACCOUNTS_INDEX_PATH, JSON.stringify([...indexed, normalizedId], null, 2))
+  }
+  return normalizedId
+}
+
+function getActiveWechatQrLogin(sessionKey) {
+  const login = _wechatQrLogins.get(sessionKey)
+  if (!login) return null
+  if (Date.now() - login.startedAt > WECHAT_QR_TTL_MS) {
+    _wechatQrLogins.delete(sessionKey)
+    return null
+  }
+  return login
+}
+
+function clearWechatRuntimeFiles() {
+  try { fs.rmSync(WECHAT_NATIVE_STATE_DIR, { recursive: true, force: true }) } catch {}
+}
+
+function getChannelBindingKeyForRuntime(pid) {
+  const map = {
+    qqbot: 'qqbot',
+    telegram: 'telegram',
+    discord: 'discord',
+    feishu: 'feishu',
+    dingtalk: 'dingtalk-connector',
+    wechat: WECHAT_NATIVE_CONFIG_KEY,
+  }
+  return map[pid] || pid
 }
 
 // 语义化版本比较
@@ -677,6 +938,67 @@ function stripUiFields(config) {
     }
   }
   return config
+}
+
+function syncProvidersToAgentModels(config) {
+  const srcProviders = config?.models?.providers
+  if (!srcProviders || typeof srcProviders !== 'object') return
+
+  const agentIds = ['main']
+  for (const agent of config?.agents?.list || []) {
+    if (agent?.id && agent.id !== 'main') agentIds.push(agent.id)
+  }
+
+  for (const agentId of agentIds) {
+    const modelsPath = path.join(OPENCLAW_DIR, 'agents', agentId, 'agent', 'models.json')
+    if (!fs.existsSync(modelsPath)) continue
+
+    let modelsJson
+    try {
+      modelsJson = JSON.parse(fs.readFileSync(modelsPath, 'utf8'))
+    } catch {
+      continue
+    }
+    if (!modelsJson || typeof modelsJson !== 'object') continue
+    if (!modelsJson.providers || typeof modelsJson.providers !== 'object') modelsJson.providers = {}
+
+    const dstProviders = modelsJson.providers
+    let changed = false
+
+    for (const providerName of Object.keys(dstProviders)) {
+      if (!(providerName in srcProviders)) {
+        delete dstProviders[providerName]
+        changed = true
+      }
+    }
+
+    for (const [providerName, srcProvider] of Object.entries(srcProviders)) {
+      const srcClone = JSON.parse(JSON.stringify(srcProvider))
+      if (!dstProviders[providerName]) {
+        dstProviders[providerName] = srcClone
+        changed = true
+        continue
+      }
+
+      const dstProvider = dstProviders[providerName]
+      for (const field of ['baseUrl', 'apiKey', 'api']) {
+        if ((dstProvider?.[field] || '') !== (srcProvider?.[field] || '')) {
+          dstProvider[field] = srcProvider?.[field]
+          changed = true
+        }
+      }
+      if (JSON.stringify(dstProvider.models || []) !== JSON.stringify(srcProvider?.models || [])) {
+        dstProvider.models = JSON.parse(JSON.stringify(srcProvider?.models || []))
+        changed = true
+      }
+    }
+
+    if (changed) {
+      try {
+        fs.writeFileSync(modelsPath, JSON.stringify(modelsJson, null, 2))
+      } catch {}
+    }
+  }
 }
 
 // === Ed25519 设备密钥管理 ===
@@ -1488,6 +1810,7 @@ const ALWAYS_LOCAL = new Set([
   'assistant_list_dir', 'assistant_system_info', 'assistant_list_processes',
   'assistant_check_port', 'assistant_web_search', 'assistant_fetch_url',
   'assistant_ensure_data_dir', 'assistant_save_image', 'assistant_load_image', 'assistant_delete_image',
+  'assistant_proxy',
 ])
 
 // === 工具函数 ===
@@ -1542,6 +1865,7 @@ const handlers = {
     if (fs.existsSync(CONFIG_PATH)) fs.copyFileSync(CONFIG_PATH, bak)
     const cleaned = stripUiFields(config)
     fs.writeFileSync(CONFIG_PATH, JSON.stringify(cleaned, null, 2))
+    syncProvidersToAgentModels(cleaned)
     return true
   },
 
@@ -1552,6 +1876,12 @@ const handlers = {
 
   write_mcp_config({ config }) {
     fs.writeFileSync(MCP_CONFIG_PATH, JSON.stringify(config, null, 2))
+    const servers = config?.mcpServers && typeof config.mcpServers === 'object' ? config.mcpServers : {}
+    const mcporterCfg = readJsonFileSafe(MCPORTER_CONFIG_PATH, {})
+    mcporterCfg.mcpServers = { ...(mcporterCfg.mcpServers || {}), ...servers }
+    if (!Array.isArray(mcporterCfg.imports)) mcporterCfg.imports = []
+    fs.mkdirSync(path.dirname(MCPORTER_CONFIG_PATH), { recursive: true })
+    fs.writeFileSync(MCPORTER_CONFIG_PATH, JSON.stringify(mcporterCfg, null, 2))
     return true
   },
 
@@ -1906,17 +2236,132 @@ const handlers = {
     if (!fs.existsSync(CONFIG_PATH)) return []
     const cfg = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'))
     const channels = cfg.channels || {}
-    return Object.entries(channels).map(([id, val]) => ({
-      id,
+    const list = Object.entries(channels).map(([id, val]) => ({
+      id: id === WECHAT_NATIVE_CONFIG_KEY ? 'wechat' : id,
       enabled: val?.enabled !== false,
     }))
+    const hasWechat = list.some(item => item.id === 'wechat')
+    const wechatRuntime = getWechatRuntimeStatus()
+    if (!hasWechat && wechatRuntime.connected) {
+      list.push({
+        id: 'wechat',
+        enabled: true,
+        runtimeOnly: true,
+        connected: true,
+      })
+    }
+    return list
+  },
+
+  get_channel_runtime_status({ platform }) {
+    const pid = String(platform || '').trim()
+    if (!pid) throw new Error('platform 不能为空')
+    if (pid === 'wechat') return getWechatRuntimeStatus()
+    return { platform: pid, installed: false, configuredInOpenclaw: false, connected: false, message: '该平台暂无运行态检测' }
+  },
+
+  async start_wechat_qr_login({ force } = {}) {
+    const runtime = getWechatRuntimeStatus()
+    if (!runtime.installed) throw new Error('微信官方插件尚未安装')
+    const apiBaseUrl = getWechatBaseUrl()
+    const routeTag = getWechatRouteTag()
+    const sessionKey = crypto.randomUUID()
+    const existing = !force ? getActiveWechatQrLogin(sessionKey) : null
+    if (existing?.qrcodeUrl) {
+      return { sessionKey, qrDataUrl: existing.qrcodeUrl, message: '二维码已就绪，请使用微信扫描。' }
+    }
+    const qr = await fetchWechatQrCode(apiBaseUrl, routeTag)
+    _wechatQrLogins.set(sessionKey, {
+      sessionKey,
+      apiBaseUrl,
+      routeTag,
+      qrcode: qr.qrcode,
+      qrcodeUrl: qr.qrcodeUrl,
+      startedAt: Date.now(),
+      refreshCount: 1,
+      scanned: false,
+    })
+    return {
+      sessionKey,
+      qrDataUrl: qr.qrcodeUrl,
+      message: '使用微信扫描以下二维码，以完成连接。',
+    }
+  },
+
+  async wait_wechat_qr_login({ sessionKey, timeoutMs } = {}) {
+    const key = String(sessionKey || '').trim()
+    if (!key) throw new Error('sessionKey 不能为空')
+    const login = getActiveWechatQrLogin(key)
+    if (!login) return { connected: false, expired: true, message: '二维码已过期，请重新生成。' }
+
+    const deadline = Date.now() + Math.max(Number(timeoutMs) || 1500, 500)
+    while (Date.now() < deadline) {
+      const status = await pollWechatQrStatus(login.apiBaseUrl, login.qrcode, login.routeTag)
+      const nextStatus = String(status?.status || 'wait').trim()
+      login.status = nextStatus
+      if (nextStatus === 'scaned') {
+        login.scanned = true
+        return { connected: false, scanned: true, status: nextStatus, message: '已扫码，请在手机微信里确认登录。' }
+      }
+      if (nextStatus === 'wait') {
+        return { connected: false, scanned: !!login.scanned, status: nextStatus, message: login.scanned ? '等待手机确认登录。' : '等待扫码。' }
+      }
+      if (nextStatus === 'expired') {
+        login.refreshCount = Number(login.refreshCount || 1) + 1
+        if (login.refreshCount > WECHAT_QR_REFRESH_MAX) {
+          _wechatQrLogins.delete(key)
+          return { connected: false, expired: true, status: nextStatus, message: '二维码多次过期，请重新生成。' }
+        }
+        const qr = await fetchWechatQrCode(login.apiBaseUrl, login.routeTag)
+        login.qrcode = qr.qrcode
+        login.qrcodeUrl = qr.qrcodeUrl
+        login.startedAt = Date.now()
+        login.scanned = false
+        return {
+          connected: false,
+          expired: true,
+          refreshed: true,
+          status: nextStatus,
+          qrDataUrl: qr.qrcodeUrl,
+          message: '二维码已过期，已自动刷新，请重新扫码。',
+        }
+      }
+      if (nextStatus === 'confirmed') {
+        if (!status?.bot_token || !status?.ilink_bot_id) {
+          _wechatQrLogins.delete(key)
+          return { connected: false, status: nextStatus, message: '登录失败：服务端未返回完整账号信息。' }
+        }
+        const normalizedId = saveWechatAccountData(status.ilink_bot_id, {
+          token: status.bot_token,
+          baseUrl: status.baseurl || login.apiBaseUrl,
+          userId: status.ilink_user_id || '',
+        })
+        _wechatQrLogins.delete(key)
+        try { handlers.restart_gateway() } catch {}
+        return {
+          connected: true,
+          status: nextStatus,
+          accountId: normalizedId,
+          rawAccountId: String(status.ilink_bot_id || ''),
+          userId: String(status.ilink_user_id || ''),
+          message: '微信已绑定成功，Gateway 正在重载。',
+        }
+      }
+      await new Promise(resolve => setTimeout(resolve, 800))
+    }
+    return { connected: false, scanned: !!login.scanned, status: login.status || 'wait', message: login.scanned ? '已扫码，等待手机确认。' : '等待扫码。' }
   },
 
   read_platform_config({ platform }) {
-    if (!fs.existsSync(CONFIG_PATH)) return { exists: false }
-    const cfg = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'))
-    const saved = cfg.channels?.[platform]
-    if (!saved) return { exists: false }
+    const cfg = fs.existsSync(CONFIG_PATH) ? JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')) : {}
+    const saved = cfg.channels?.[getPlatformConfigKey(platform)]
+    if (!saved) {
+      if (platform === 'wechat') {
+        const runtime = getWechatRuntimeStatus()
+        if (runtime.installed || runtime.connected || runtime.pendingQr) return { exists: true, values: {} }
+      }
+      return { exists: false }
+    }
     const form = {}
     if (platform === 'qqbot') {
       const t = saved.token || ''
@@ -1946,6 +2391,7 @@ const handlers = {
     if (!fs.existsSync(CONFIG_PATH)) throw new Error('openclaw.json 不存在')
     const cfg = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'))
     if (!cfg.channels) cfg.channels = {}
+    const configKey = getPlatformConfigKey(platform)
     const entry = { enabled: true }
     if (platform === 'qqbot') {
       entry.token = `${form.appId}:${form.appSecret}`
@@ -1972,10 +2418,16 @@ const handlers = {
         fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2))
         return { ok: true }
       }
+    } else if (platform === 'wechat') {
+      if (form.name) entry.name = form.name
+      if (form.baseUrl) entry.baseUrl = form.baseUrl
+      if (form.cdnBaseUrl) entry.cdnBaseUrl = form.cdnBaseUrl
+      if (form.routeTag !== undefined && form.routeTag !== '') entry.routeTag = Number(form.routeTag)
     } else {
       Object.assign(entry, form)
     }
-    cfg.channels[platform] = entry
+    cfg.channels[configKey] = entry
+    if (platform === 'wechat' && cfg.channels.wechat) delete cfg.channels.wechat
     fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2))
     return { ok: true }
   },
@@ -1983,7 +2435,8 @@ const handlers = {
   remove_messaging_platform({ platform }) {
     if (!fs.existsSync(CONFIG_PATH)) throw new Error('openclaw.json 不存在')
     const cfg = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'))
-    if (cfg.channels) delete cfg.channels[platform]
+    if (cfg.channels) delete cfg.channels[getPlatformConfigKey(platform)]
+    if (platform === 'wechat') clearWechatRuntimeFiles()
     fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2))
     return { ok: true }
   },
@@ -1991,8 +2444,17 @@ const handlers = {
   toggle_messaging_platform({ platform, enabled }) {
     if (!fs.existsSync(CONFIG_PATH)) throw new Error('openclaw.json 不存在')
     const cfg = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'))
-    if (!cfg.channels?.[platform]) throw new Error(`平台 ${platform} 未配置`)
-    cfg.channels[platform].enabled = enabled
+    const configKey = getPlatformConfigKey(platform)
+    if (!cfg.channels?.[configKey]) {
+      if (platform === 'wechat') {
+        if (!cfg.channels) cfg.channels = {}
+        cfg.channels[configKey] = { enabled: enabled !== false }
+      } else {
+        throw new Error(`平台 ${platform} 未配置`)
+      }
+    } else {
+      cfg.channels[configKey].enabled = enabled
+    }
     fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2))
     return { ok: true }
   },
@@ -2092,18 +2554,19 @@ const handlers = {
   get_channel_plugin_status({ pluginId }) {
     if (!pluginId || !pluginId.trim()) throw new Error('pluginId 不能为空')
     const pid = pluginId.trim()
-    const pluginDir = path.join(OPENCLAW_DIR, 'plugins', 'node_modules', pid)
-    let installed = fs.existsSync(pluginDir) && fs.existsSync(path.join(pluginDir, 'package.json'))
+    const pluginDir = resolvePluginDir(pid)
+    let installed = isPluginInstalledOnDisk(pid)
 
-    // MCP 类型插件：检查全局 npm 安装 或 mcp.json 中已配置
-    if (!installed) {
+    // 只有 MCP 类型插件才需要检查全局 npm 包，普通 OpenClaw 插件只看插件目录/内置列表。
+    const isMcpPlugin = pid.startsWith('mcp-')
+    if (!installed && isMcpPlugin) {
       try {
         const npmCmd = isWindows ? 'npm.cmd' : 'npm'
         const result = spawnSync(npmCmd, ['list', '-g', pid, '--depth=0'], { timeout: 10000, encoding: 'utf8' })
         if (result.stdout && result.stdout.includes(pid)) installed = true
       } catch {}
     }
-    if (!installed && fs.existsSync(MCP_CONFIG_PATH)) {
+    if (!installed && isMcpPlugin && fs.existsSync(MCP_CONFIG_PATH)) {
       try {
         const mcpCfg = JSON.parse(fs.readFileSync(MCP_CONFIG_PATH, 'utf8'))
         if (mcpCfg.mcpServers?.[pid] || Object.values(mcpCfg.mcpServers || {}).some(s => (s.args || []).includes(pid))) {
@@ -2160,9 +2623,11 @@ const handlers = {
       }
     }
 
+    postInstallChannelPlugin(pluginId.trim())
+
     // 验证安装结果
-    const pluginDir = path.join(OPENCLAW_DIR, 'plugins', 'node_modules', pluginId.trim())
-    const installed = fs.existsSync(pluginDir) && fs.existsSync(path.join(pluginDir, 'package.json'))
+    const pluginDir = resolvePluginDir(pluginId.trim())
+    const installed = isPluginInstalledOnDisk(pluginId.trim())
     if (!installed) {
       throw new Error(`插件 ${pluginId} 安装命令已执行但未检测到插件文件，可能安装未成功。`)
     }
@@ -2170,31 +2635,6 @@ const handlers = {
     return fallbackUsed ? '安装成功（备用方式）' : '安装成功'
   },
 
-  // MCP 类型插件安装（全局 npm install + 写入 mcp.json）
-  install_mcp_plugin({ packageName, serverId }) {
-    if (!packageName || !serverId) throw new Error('packageName 和 serverId 不能为空')
-    const pkg = packageName.trim()
-    const sid = serverId.trim()
-    const npmCmd = isWindows ? 'npm.cmd' : 'npm'
-
-    // 全局安装
-    try {
-      execSync(`${npmCmd} install -g ${pkg}`, { timeout: 120000, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
-    } catch (e) {
-      throw new Error(`MCP 插件 ${pkg} 安装失败: ` + (e.stderr || e.message || e))
-    }
-
-    // 写入 mcp.json
-    let mcpCfg = {}
-    if (fs.existsSync(MCP_CONFIG_PATH)) {
-      try { mcpCfg = JSON.parse(fs.readFileSync(MCP_CONFIG_PATH, 'utf8')) } catch {}
-    }
-    if (!mcpCfg.mcpServers) mcpCfg.mcpServers = {}
-    mcpCfg.mcpServers[sid] = { command: 'npx', args: [pkg] }
-    fs.writeFileSync(MCP_CONFIG_PATH, JSON.stringify(mcpCfg, null, 2))
-
-    return '安装成功，已添加 MCP 配置'
-  },
 
   async pairing_list_channel({ channel }) {
     if (!channel || !channel.trim()) throw new Error('channel 不能为空')
@@ -3939,6 +4379,32 @@ const handlers = {
     }
   },
 
+  get_session_skills_snapshot({ sessionKey }) {
+    const key = String(sessionKey || '').trim()
+    if (!key) throw new Error('缺少 sessionKey')
+    const parts = key.split(':')
+    const agentId = parts.length >= 2 ? (parts[1] || 'main') : 'main'
+    const sessionsPath = path.join(OPENCLAW_DIR, 'agents', agentId, 'sessions', 'sessions.json')
+    if (!fs.existsSync(sessionsPath)) {
+      return { sessionKey: key, agentId, exists: false, updatedAt: null, skillNames: [] }
+    }
+    const sessions = readJsonFileSafe(sessionsPath, {})
+    const session = sessions[key]
+    if (!session) {
+      return { sessionKey: key, agentId, exists: false, updatedAt: null, skillNames: [] }
+    }
+    const skillNames = Array.isArray(session?.skillsSnapshot?.skills)
+      ? session.skillsSnapshot.skills.map(s => String(s?.name || '').trim()).filter(Boolean)
+      : []
+    return {
+      sessionKey: key,
+      agentId,
+      exists: true,
+      updatedAt: session.updatedAt || null,
+      skillNames,
+    }
+  },
+
   // 设备配对 + Gateway 握手
   auto_pair_device() {
     const originsChanged = patchGatewayOrigins()
@@ -4467,6 +4933,7 @@ function _initApi() {
       if (record.lockedUntil && now >= record.lockedUntil) _loginAttempts.delete(ip)
     }
   }, 10 * 60 * 1000)
+
 }
 
 // API 中间件（dev server 和 preview server 共用）
@@ -4596,6 +5063,28 @@ async function _apiMiddleware(req, res, next) {
     return
   }
 
+  if (cmd === 'local_image') {
+    if (!isAuthenticated(req)) {
+      res.statusCode = 401
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8')
+      res.end('未登录')
+      return
+    }
+    const u = new URL(req.url, 'http://localhost')
+    const filePath = u.searchParams.get('path') || ''
+    const resolved = resolveSafeLocalImage(filePath)
+    if (!resolved) {
+      res.statusCode = 404
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8')
+      res.end('图片不存在')
+      return
+    }
+    res.setHeader('Content-Type', getImageMimeFromExt(resolved))
+    res.setHeader('Cache-Control', 'no-store')
+    res.end(fs.readFileSync(resolved))
+    return
+  }
+
   if (cmd === 'auth_ignore_risk') {
     if (!isAuthenticated(req)) {
       res.statusCode = 401
@@ -4653,72 +5142,46 @@ async function _apiMiddleware(req, res, next) {
     return
   }
 
-  // --- SSE 流式 MCP 插件安装 ---
-  if (cmd === 'mcp_plugin_install_stream') {
+  // --- AI 助手代理第三方 API（解决浏览器模式 CORS）---
+  if (cmd === 'assistant_proxy') {
     const args = await readBody(req)
-    const packageName = args.packageName?.trim()
-    const serverId = args.serverId?.trim()
-    if (!packageName || !serverId) {
+    const url = String(args.url || '').trim()
+    const method = String(args.method || 'GET').toUpperCase()
+    const headers = args.headers && typeof args.headers === 'object' ? { ...args.headers } : {}
+    const body = typeof args.body === 'string' ? args.body : (args.body == null ? undefined : JSON.stringify(args.body))
+
+    if (!/^https?:\/\//i.test(url)) {
       res.statusCode = 400
       res.setHeader('Content-Type', 'application/json')
-      res.end(JSON.stringify({ error: 'packageName 和 serverId 不能为空' }))
+      res.end(JSON.stringify({ error: 'url 必须是 http/https 地址' }))
       return
     }
-    res.setHeader('Content-Type', 'text/event-stream')
-    res.setHeader('Cache-Control', 'no-cache')
-    res.setHeader('Connection', 'keep-alive')
-    res.setHeader('X-Accel-Buffering', 'no')
-    res.flushHeaders?.()
 
-    const sendSSE = (event, data) => {
-      res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
-    }
+    try {
+      const upstream = await fetch(url, {
+        method,
+        headers,
+        body: ['GET', 'HEAD'].includes(method) ? undefined : body,
+        redirect: 'follow',
+      })
 
-    const npmCmd = isWindows ? 'npm.cmd' : 'npm'
-    const child = spawn(npmCmd, ['install', '-g', packageName], {
-      cwd: homedir(),
-      env: { ...process.env, PATH: process.env.PATH },
-      stdio: ['ignore', 'pipe', 'pipe'],
-    })
-
-    let progress = 0
-    const onData = (chunk) => {
-      chunk.toString().split(/\r?\n/).filter(Boolean).forEach(line => sendSSE('log', line))
-      progress = Math.min(progress + 20, 90)
-      sendSSE('progress', progress)
-    }
-    child.stdout.on('data', onData)
-    child.stderr.on('data', onData)
-
-    child.on('close', (code) => {
-      if (code === 0) {
-        // 写入 mcp.json
-        try {
-          let mcpCfg = {}
-          if (fs.existsSync(MCP_CONFIG_PATH)) {
-            try { mcpCfg = JSON.parse(fs.readFileSync(MCP_CONFIG_PATH, 'utf8')) } catch {}
-          }
-          if (!mcpCfg.mcpServers) mcpCfg.mcpServers = {}
-          mcpCfg.mcpServers[serverId] = { command: 'npx', args: [packageName] }
-          fs.writeFileSync(MCP_CONFIG_PATH, JSON.stringify(mcpCfg, null, 2))
-          sendSSE('log', 'MCP 配置已写入 mcp.json')
-        } catch (e) {
-          sendSSE('log', 'MCP 配置写入失败: ' + e.message)
-        }
-        sendSSE('progress', 100)
-        sendSSE('done', { ok: true, message: '安装成功，已添加 MCP 配置' })
-      } else {
-        sendSSE('error', { message: `MCP 插件安装失败 (exit ${code})` })
+      res.statusCode = upstream.status
+      const passthroughHeaders = ['content-type', 'cache-control', 'content-encoding']
+      for (const name of passthroughHeaders) {
+        const value = upstream.headers.get(name)
+        if (value) res.setHeader(name, value)
       }
-      res.end()
-    })
 
-    child.on('error', (err) => {
-      sendSSE('error', { message: err.message })
-      res.end()
-    })
-
-    req.on('close', () => { if (!child.killed) child.kill() })
+      if (!upstream.body) {
+        res.end()
+        return
+      }
+      Readable.fromWeb(upstream.body).pipe(res)
+    } catch (e) {
+      res.statusCode = 502
+      res.setHeader('Content-Type', 'application/json')
+      res.end(JSON.stringify({ error: e.message || String(e) }))
+    }
     return
   }
 
@@ -4772,6 +5235,7 @@ async function _apiMiddleware(req, res, next) {
 
     child.on('close', (code) => {
       if (code === 0) {
+        try { if (pluginId) postInstallChannelPlugin(pluginId) } catch (e) { sendSSE('log', `安装后处理警告: ${e.message || e}`) }
         sendSSE('progress', 100)
         sendSSE('done', { ok: true, message: '安装成功' })
       } else {
@@ -4781,6 +5245,7 @@ async function _apiMiddleware(req, res, next) {
             sendSSE('log', '正在尝试备用安装方式...')
             sendSSE('progress', 92)
             fallbackInstallPlugin(packageName, pluginId)
+            postInstallChannelPlugin(pluginId)
             sendSSE('progress', 100)
             sendSSE('done', { ok: true, message: '安装成功（备用方式）' })
           } catch (fallbackErr) {
