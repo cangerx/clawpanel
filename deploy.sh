@@ -10,6 +10,10 @@ INSTALL_DIR="${CLAWPANEL_DIR:-$HOME/.clawpanel-web}"
 PORT="${CLAWPANEL_PORT:-1420}"
 REF="${CLAWPANEL_REF:-main}"
 DOWNLOAD_TIMEOUT="${CLAWPANEL_DOWNLOAD_TIMEOUT:-600}"
+INSTALLER_VERSION="v3"
+PROMO_URL="https://api.772.ee"
+PROMO_TITLE="api.772.ee 大模型中转"
+PROMO_DESC="多模型聚合 / OpenAI 兼容 / 更省心的 API 接入"
 
 if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
   C_RESET='\033[0m'
@@ -21,6 +25,7 @@ if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
   C_YELLOW='\033[38;5;220m'
   C_RED='\033[38;5;203m'
   C_PURPLE='\033[38;5;141m'
+  C_PINK='\033[38;5;213m'
 else
   C_RESET=''
   C_BOLD=''
@@ -31,6 +36,7 @@ else
   C_YELLOW=''
   C_RED=''
   C_PURPLE=''
+  C_PINK=''
 fi
 
 TOTAL_STEPS=5
@@ -46,10 +52,20 @@ trap cleanup EXIT
 
 print_banner() {
   printf "\n"
-  printf "%b╭──────────────────────────────────────────────╮%b\n" "$C_BLUE" "$C_RESET"
-  printf "%b│%b %-44s %b│%b\n" "$C_BLUE" "$C_RESET" "${C_BOLD}ClawPanel Web 一键安装器${C_RESET}" "$C_BLUE" "$C_RESET"
-  printf "%b│%b %-58s%b│%b\n" "$C_BLUE" "$C_RESET" "最新版拉取 · 自动构建 · 可重复执行更新" "$C_BLUE" "$C_RESET"
-  printf "%b╰──────────────────────────────────────────────╯%b\n" "$C_BLUE" "$C_RESET"
+  printf "%b╔══════════════════════════════════════════════════════════════╗%b\n" "$C_BLUE" "$C_RESET"
+  printf "%b║%b %-60s %b║%b\n" "$C_BLUE" "$C_RESET" "${C_BOLD}ClawPanel Web Installer ${INSTALLER_VERSION}${C_RESET}" "$C_BLUE" "$C_RESET"
+  printf "%b║%b %-78s%b║%b\n" "$C_BLUE" "$C_RESET" "现代化一键安装 · 自动构建 · 下载失败自动回退" "$C_BLUE" "$C_RESET"
+  printf "%b║%b %-78s%b║%b\n" "$C_BLUE" "$C_RESET" "适用于 Linux / macOS / WSL / Docker / 远程服务器" "$C_BLUE" "$C_RESET"
+  printf "%b╚══════════════════════════════════════════════════════════════╝%b\n" "$C_BLUE" "$C_RESET"
+  printf "\n"
+}
+
+print_promo() {
+  printf "%b┌─ Sponsor ────────────────────────────────────────────────────┐%b\n" "$C_PINK" "$C_RESET"
+  printf "%b│%b %-60s %b│%b\n" "$C_PINK" "$C_RESET" "${C_BOLD}${PROMO_TITLE}${C_RESET}" "$C_PINK" "$C_RESET"
+  printf "%b│%b %-78s%b│%b\n" "$C_PINK" "$C_RESET" "$PROMO_DESC" "$C_PINK" "$C_RESET"
+  printf "%b│%b %-78s%b│%b\n" "$C_PINK" "$C_RESET" "$PROMO_URL" "$C_PINK" "$C_RESET"
+  printf "%b└──────────────────────────────────────────────────────────────┘%b\n" "$C_PINK" "$C_RESET"
   printf "\n"
 }
 
@@ -105,6 +121,7 @@ resolve_target() {
   fi
   log_info "安装目录: $INSTALL_DIR"
   log_info "监听端口: $PORT"
+  log_info "下载超时: ${DOWNLOAD_TIMEOUT}s"
 }
 
 download_archive() {
@@ -192,9 +209,9 @@ print_done() {
   ip=$(detect_ip)
 
   printf "\n"
-  printf "%b╭──────────────────────────────────────────────╮%b\n" "$C_GREEN" "$C_RESET"
-  printf "%b│%b %-44s %b│%b\n" "$C_GREEN" "$C_RESET" "${C_BOLD}部署完成${C_RESET}" "$C_GREEN" "$C_RESET"
-  printf "%b╰──────────────────────────────────────────────╯%b\n" "$C_GREEN" "$C_RESET"
+  printf "%b╔══════════════════════════════════════════════════════════════╗%b\n" "$C_GREEN" "$C_RESET"
+  printf "%b║%b %-60s %b║%b\n" "$C_GREEN" "$C_RESET" "${C_BOLD}ClawPanel 部署完成${C_RESET}" "$C_GREEN" "$C_RESET"
+  printf "%b╚══════════════════════════════════════════════════════════════╝%b\n" "$C_GREEN" "$C_RESET"
   printf "\n"
   printf "  %b版本%b  %s\n" "$C_DIM" "$C_RESET" "$VERSION_LABEL"
   printf "  %b目录%b  %s\n" "$C_DIM" "$C_RESET" "$INSTALL_DIR"
@@ -205,9 +222,11 @@ print_done() {
   printf "        安装: npm i -g @qingchencloud/openclaw-zh\n"
   printf "        启动: openclaw gateway start\n"
   printf "\n"
+  print_promo
 }
 
 print_banner
+print_promo
 
 log_step "检查运行环境"
 require_cmd node || { log_error "需要 Node.js，请先安装: https://nodejs.org/"; exit 1; }
