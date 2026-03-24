@@ -33,7 +33,7 @@
 
 ClawPanel 是 [OpenClaw](https://github.com/1186258278/OpenClawChineseTranslation) AI Agent 框架的可视化管理面板。**内置智能 AI 助手**，帮你一键安装 OpenClaw、自动诊断配置、排查问题、修复错误。8 大工具 + 4 种模式 + 交互式问答，从新手到老手都能轻松管理。
 
-> 📦 **下载**: [GitHub Releases](https://github.com/cangerx/clawpanel/releases/latest)
+> 📦 **下载**: [GitHub Releases](https://github.com/cangerx/clawpanel/releases/latest) | [Gitee 镜像](https://gitee.com/cangerx/clawpanel)
 
 ### 🔥 开发板 / 嵌入式设备支持
 
@@ -97,6 +97,8 @@ ClawPanel 提供**纯 Web 部署模式**（零 GUI 依赖），适合 ARM64 开�
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/cangerx/clawpanel/main/deploy.sh | bash
+# 国内网络可改用 Gitee 镜像：
+# curl -fsSL https://gitee.com/cangerx/clawpanel/raw/main/deploy.sh | bash
 ```
 
 脚本会自动选择最合适的后台运行方式（`systemd` / `systemd --user` / `nohup`），并输出访问地址、状态命令和日志命令。
@@ -326,6 +328,7 @@ clawpanel/
 
 ```bash
 git clone https://github.com/cangerx/clawpanel.git
+# 国内网络可改用 Gitee 镜像：git clone https://gitee.com/cangerx/clawpanel.git
 cd clawpanel
 npm install
 ```
@@ -387,6 +390,7 @@ npm run tauri build -- --bundles nsis
 ```bash
 # 克隆并安装
 git clone https://github.com/cangerx/clawpanel.git
+# 国内网络可改用 Gitee 镜像：git clone https://gitee.com/cangerx/clawpanel.git
 cd clawpanel
 npm install
 
@@ -453,6 +457,8 @@ Linux 服务器推荐使用统一入口 `deploy.sh` 进行安装或更新：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/cangerx/clawpanel/main/deploy.sh | bash
+# 国内网络可改用 Gitee 镜像：
+# curl -fsSL https://gitee.com/cangerx/clawpanel/raw/main/deploy.sh | bash
 ```
 
 脚本会自动处理下载、依赖安装、生产构建，并优先选择 `systemd`、`systemd --user` 或 `nohup` 作为后台运行方式。

@@ -1,10 +1,18 @@
 #!/bin/bash
 # ClawPanel Linux / Web 统一安装脚本
-# 用法: curl -fsSL https://raw.githubusercontent.com/cangerx/clawpanel/main/deploy.sh | bash
+# 用法:
+#   GitHub: curl -fsSL https://raw.githubusercontent.com/cangerx/clawpanel/main/deploy.sh | bash
+#   Gitee:  curl -fsSL https://gitee.com/cangerx/clawpanel/raw/main/deploy.sh | bash
 
 set -euo pipefail
 
 REPO="cangerx/clawpanel"
+GITHUB_REPO_URL="https://github.com/$REPO"
+GITEE_REPO_URL="https://gitee.com/$REPO"
+GITHUB_RAW_BASE="https://raw.githubusercontent.com/cangerx/clawpanel"
+GITEE_RAW_BASE="https://gitee.com/cangerx/clawpanel/raw"
+GITHUB_ARCHIVE_BASE="https://github.com/$REPO/archive/refs"
+GITEE_ARCHIVE_BASE="https://gitee.com/$REPO/repository/archive"
 SERVICE_NAME="clawpanel"
 REF="${CLAWPANEL_REF:-main}"
 PORT="${CLAWPANEL_PORT:-1420}"
@@ -69,6 +77,7 @@ TOTAL_STEPS=6
 STEP=0
 TMP_DIR=''
 DOWNLOAD_URL=''
+DOWNLOAD_URL_ALT=''
 VERSION_LABEL=''
 NODE_BIN=''
 SERVICE_PATH=''
@@ -313,10 +322,12 @@ detect_ip() {
 
 resolve_target() {
   if [ "$REF" = "main" ]; then
-    DOWNLOAD_URL="https://github.com/$REPO/archive/refs/heads/main.tar.gz"
+    DOWNLOAD_URL="$GITHUB_ARCHIVE_BASE/heads/main.tar.gz"
+    DOWNLOAD_URL_ALT="$GITEE_ARCHIVE_BASE?ref=main&format=tgz"
     VERSION_LABEL="main"
   else
-    DOWNLOAD_URL="https://github.com/$REPO/archive/refs/tags/$REF.tar.gz"
+    DOWNLOAD_URL="$GITHUB_ARCHIVE_BASE/tags/$REF.tar.gz"
+    DOWNLOAD_URL_ALT="$GITEE_ARCHIVE_BASE?ref=$REF&format=tgz"
     VERSION_LABEL="$REF"
   fi
 
@@ -358,8 +369,20 @@ fetch_source() {
     [ -s "$tmp_file" ] || return 1
     mkdir -p "$tmp_extract"
     tar xzf "$tmp_file" -C "$tmp_extract" --strip-components=1
-    log_ok "源码包下载并解压完成"
+    log_ok "源码包下载并解压完成（GitHub）"
     return 0
+  fi
+
+  if [ -n "$DOWNLOAD_URL_ALT" ]; then
+    log_warn "GitHub 源码包下载失败，尝试使用 Gitee 镜像"
+    rm -f "$tmp_file"
+    if download_archive "$DOWNLOAD_URL_ALT" "$tmp_file"; then
+      [ -s "$tmp_file" ] || return 1
+      mkdir -p "$tmp_extract"
+      tar xzf "$tmp_file" -C "$tmp_extract" --strip-components=1
+      log_ok "源码包下载并解压完成（Gitee）"
+      return 0
+    fi
   fi
 
   return 1
@@ -377,12 +400,24 @@ clone_source_fallback() {
   rm -rf "$tmp_extract"
 
   if [ "$REF" = "main" ]; then
-    git clone --depth 1 "https://github.com/$REPO.git" "$tmp_extract"
-  else
-    git clone --depth 1 --branch "$REF" "https://github.com/$REPO.git" "$tmp_extract"
+    if git clone --depth 1 "$GITHUB_REPO_URL.git" "$tmp_extract"; then
+      log_ok "git clone 回退成功（GitHub）"
+      return 0
+    fi
+    log_warn "GitHub clone 失败，尝试使用 Gitee 镜像"
+    git clone --depth 1 "$GITEE_REPO_URL.git" "$tmp_extract"
+    log_ok "git clone 回退成功（Gitee）"
+    return 0
   fi
 
-  log_ok "git clone 回退成功"
+  if git clone --depth 1 --branch "$REF" "$GITHUB_REPO_URL.git" "$tmp_extract"; then
+    log_ok "git clone 回退成功（GitHub）"
+    return 0
+  fi
+
+  log_warn "GitHub clone 失败，尝试使用 Gitee 镜像"
+  git clone --depth 1 --branch "$REF" "$GITEE_REPO_URL.git" "$tmp_extract"
+  log_ok "git clone 回退成功（Gitee）"
 }
 
 stop_existing_nohup_runtime() {

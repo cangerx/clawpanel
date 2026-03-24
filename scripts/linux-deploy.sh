@@ -17,14 +17,25 @@ if [ -n "$LOCAL_ROOT" ]; then
   exec bash "$LOCAL_ROOT" "$@"
 fi
 
-DEPLOY_URL="https://raw.githubusercontent.com/cangerx/clawpanel/main/deploy.sh"
+GITHUB_DEPLOY_URL="https://raw.githubusercontent.com/cangerx/clawpanel/main/deploy.sh"
+GITEE_DEPLOY_URL="https://gitee.com/cangerx/clawpanel/raw/main/deploy.sh"
 
 if command -v curl >/dev/null 2>&1; then
-  exec bash <(curl -fsSL "$DEPLOY_URL") "$@"
+  tmp_script=$(mktemp /tmp/clawpanel-deploy-XXXXXX.sh)
+  if curl -fsSL "$GITHUB_DEPLOY_URL" -o "$tmp_script"; then
+    exec bash "$tmp_script" "$@"
+  fi
+  curl -fsSL "$GITEE_DEPLOY_URL" -o "$tmp_script"
+  exec bash "$tmp_script" "$@"
 fi
 
 if command -v wget >/dev/null 2>&1; then
-  exec bash <(wget -qO- "$DEPLOY_URL") "$@"
+  tmp_script=$(mktemp /tmp/clawpanel-deploy-XXXXXX.sh)
+  if wget -qO "$tmp_script" "$GITHUB_DEPLOY_URL"; then
+    exec bash "$tmp_script" "$@"
+  fi
+  wget -qO "$tmp_script" "$GITEE_DEPLOY_URL"
+  exec bash "$tmp_script" "$@"
 fi
 
 echo "Error: neither curl nor wget is available, and local deploy.sh was not found." >&2
