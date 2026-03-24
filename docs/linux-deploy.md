@@ -37,10 +37,18 @@
 
 统一安装入口：
 
+> 海外环境优先使用 GitHub；国内环境优先使用 Gitee 镜像。两者指向同一套 `deploy.sh` 安装逻辑。
+
+- **海外用户（GitHub）**
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/cangerx/clawpanel/main/deploy.sh | bash
-# 国内网络可改用 Gitee 镜像：
-# curl -fsSL https://gitee.com/cangerx/clawpanel/raw/main/deploy.sh | bash
+```
+
+- **国内用户（Gitee）**
+
+```bash
+curl -fsSL https://gitee.com/cangerx/clawpanel/raw/main/deploy.sh | bash
 ```
 
 脚本会自动完成：

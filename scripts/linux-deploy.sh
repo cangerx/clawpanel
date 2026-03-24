@@ -1,8 +1,15 @@
 #!/bin/bash
 # 兼容入口：统一转发到仓库根目录 deploy.sh
 # 支持本地仓库执行，也支持 curl | bash 直接运行此脚本
+# 推荐：海外用户使用 GitHub 地址，国内用户使用 Gitee 地址
 
 set -euo pipefail
+
+tmp_script=''
+cleanup() {
+  [ -n "$tmp_script" ] && [ -f "$tmp_script" ] && rm -f "$tmp_script"
+}
+trap cleanup EXIT
 
 LOCAL_ROOT=''
 if [ -n "${BASH_SOURCE[0]:-}" ] && [ -f "${BASH_SOURCE[0]}" ]; then

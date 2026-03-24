@@ -33,7 +33,9 @@
 
 ClawPanel 是 [OpenClaw](https://github.com/1186258278/OpenClawChineseTranslation) AI Agent 框架的可视化管理面板。**内置智能 AI 助手**，帮你一键安装 OpenClaw、自动诊断配置、排查问题、修复错误。8 大工具 + 4 种模式 + 交互式问答，从新手到老手都能轻松管理。
 
-> 📦 **下载**: [GitHub Releases](https://github.com/cangerx/clawpanel/releases/latest) | [Gitee 镜像](https://gitee.com/cangerx/clawpanel)
+> 📦 **下载**:
+> - 海外用户： [GitHub Releases](https://github.com/cangerx/clawpanel/releases/latest)
+> - 国内用户： [Gitee 仓库 / 发版镜像](https://gitee.com/cangerx/clawpanel)
 
 ### 🔥 开发板 / 嵌入式设备支持
 
@@ -49,6 +51,8 @@ ClawPanel 提供**纯 Web 部署模式**（零 GUI 依赖），适合 ARM64 开�
 ## 安装方式
 
 首页只保留安装总览。按你的使用场景选择对应入口：
+
+> **发版与下载说明**：海外下载与发版以 GitHub Releases 为主，国内同步发布到 Gitee，便于脚本下载和安装包获取。
 
 ### Desktop App
 
@@ -95,10 +99,16 @@ ClawPanel 提供**纯 Web 部署模式**（零 GUI 依赖），适合 ARM64 开�
 
 没有桌面环境？推荐使用统一安装脚本部署或更新 ClawPanel Web 版：
 
+- **海外用户（GitHub）**
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/cangerx/clawpanel/main/deploy.sh | bash
-# 国内网络可改用 Gitee 镜像：
-# curl -fsSL https://gitee.com/cangerx/clawpanel/raw/main/deploy.sh | bash
+```
+
+- **国内用户（Gitee）**
+
+```bash
+curl -fsSL https://gitee.com/cangerx/clawpanel/raw/main/deploy.sh | bash
 ```
 
 脚本会自动选择最合适的后台运行方式（`systemd` / `systemd --user` / `nohup`），并输出访问地址、状态命令和日志命令。
@@ -455,10 +465,16 @@ Web 版功能与桌面版一致，后端通过 `scripts/dev-api.js` 调用本机
 
 Linux 服务器推荐使用统一入口 `deploy.sh` 进行安装或更新：
 
+- **海外用户（GitHub）**
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/cangerx/clawpanel/main/deploy.sh | bash
-# 国内网络可改用 Gitee 镜像：
-# curl -fsSL https://gitee.com/cangerx/clawpanel/raw/main/deploy.sh | bash
+```
+
+- **国内用户（Gitee）**
+
+```bash
+curl -fsSL https://gitee.com/cangerx/clawpanel/raw/main/deploy.sh | bash
 ```
 
 脚本会自动处理下载、依赖安装、生产构建，并优先选择 `systemd`、`systemd --user` 或 `nohup` 作为后台运行方式。

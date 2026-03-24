@@ -33,11 +33,15 @@
 
 ClawPanel is a visual management panel for the [OpenClaw](https://openclaw.ai) AI Agent framework. It features a **built-in intelligent AI assistant** that helps you install OpenClaw with one click, auto-diagnose configurations, troubleshoot issues, and fix errors. 8 tools + 4 modes + interactive Q&A — easy to manage for beginners and experts alike.
 
-> 📦 **Download**: [GitHub Releases](https://github.com/cangerx/clawpanel/releases/latest) | [Gitee Mirror](https://gitee.com/cangerx/clawpanel)
+> 📦 **Download**:
+> - Overseas users: [GitHub Releases](https://github.com/cangerx/clawpanel/releases/latest)
+> - Mainland China users: [Gitee repository / release mirror](https://gitee.com/cangerx/clawpanel)
 
 ## Installation
 
 Choose the installation path that matches your platform or deployment scenario:
+
+> **Release and download policy**: GitHub Releases is the primary release channel for overseas users, while Gitee is published in parallel as the mainland China mirror for downloads and install scripts.
 
 ### Desktop App
 
@@ -79,10 +83,16 @@ Open the `.dmg`, drag ClawPanel into **Applications**, then launch it.
 
 For headless Linux servers, install or update ClawPanel Web with the canonical entry point:
 
+- **Overseas users (GitHub)**
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/cangerx/clawpanel/main/deploy.sh | bash
-# For users in mainland China, you can use the Gitee mirror instead:
-# curl -fsSL https://gitee.com/cangerx/clawpanel/raw/main/deploy.sh | bash
+```
+
+- **Mainland China users (Gitee)**
+
+```bash
+curl -fsSL https://gitee.com/cangerx/clawpanel/raw/main/deploy.sh | bash
 ```
 
 The script automatically chooses the best background runtime (`systemd`, `systemd --user`, or `nohup`) and prints the access URL, status commands, and log commands after deployment.

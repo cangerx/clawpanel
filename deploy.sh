@@ -1,8 +1,8 @@
 #!/bin/bash
 # ClawPanel Linux / Web 统一安装脚本
-# 用法:
-#   GitHub: curl -fsSL https://raw.githubusercontent.com/cangerx/clawpanel/main/deploy.sh | bash
-#   Gitee:  curl -fsSL https://gitee.com/cangerx/clawpanel/raw/main/deploy.sh | bash
+# 推荐入口:
+#   海外用户（GitHub）: curl -fsSL https://raw.githubusercontent.com/cangerx/clawpanel/main/deploy.sh | bash
+#   国内用户（Gitee）:  curl -fsSL https://gitee.com/cangerx/clawpanel/raw/main/deploy.sh | bash
 
 set -euo pipefail
 
