@@ -35,6 +35,72 @@ ClawPanel is a visual management panel for the [OpenClaw](https://openclaw.ai) A
 
 > 📦 **Download**: [GitHub Releases](https://github.com/cangerx/clawpanel/releases/latest)
 
+## Installation
+
+Choose the installation path that matches your platform or deployment scenario:
+
+### Desktop App
+
+Download the latest installer from [GitHub Releases](https://github.com/cangerx/clawpanel/releases/latest).
+
+#### Windows
+
+| Format | Package | Notes |
+|--------|---------|-------|
+| EXE installer | `ClawPanel_x.x.x_x64-setup.exe` | Recommended for most users |
+| MSI installer | `ClawPanel_x.x.x_x64_en-US.msi` | Enterprise deployment / silent install |
+
+#### macOS
+
+| Chip | Package | Notes |
+|------|---------|-------|
+| Apple Silicon (M1/M2/M3/M4) | `ClawPanel_x.x.x_aarch64.dmg` | Macs released in late 2020 and later |
+| Intel | `ClawPanel_x.x.x_x64.dmg` | Older Intel-based Macs |
+
+Open the `.dmg`, drag ClawPanel into **Applications**, then launch it.
+
+> **⚠️ First launch says “damaged” or “developer cannot be verified”?** The app is currently unsigned, so macOS may block it. Run:
+>
+> ```bash
+> sudo xattr -rd com.apple.quarantine /Applications/ClawPanel.app
+> ```
+>
+> Or go to **System Settings → Privacy & Security** and click **Open Anyway**.
+
+#### Linux Desktop
+
+| Format | Package | Notes |
+|--------|---------|-------|
+| AppImage | `ClawPanel_x.x.x_amd64.AppImage` | Portable, run after `chmod +x` |
+| DEB | `ClawPanel_x.x.x_amd64.deb` | Debian / Ubuntu |
+| RPM | `ClawPanel-x.x.x-1.x86_64.rpm` | Fedora / RHEL |
+
+### Linux Server / Web
+
+For headless Linux servers, install or update ClawPanel Web with the canonical entry point:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/cangerx/clawpanel/main/deploy.sh | bash
+```
+
+The script automatically chooses the best background runtime (`systemd`, `systemd --user`, or `nohup`) and prints the access URL, status commands, and log commands after deployment.
+
+📖 Full guide: [Linux Deployment Guide](docs/linux-deploy.md)
+
+### ARM / Embedded
+
+ARM64 boards also use the **Web mode** rather than desktop packages. Use the same `deploy.sh` entry point above for production deployments.
+
+If you only want to run the source tree manually, see [Web Development (No Rust/Tauri Required)](#web-development-no-rusttauri-required).
+
+📖 Full guide: [Armbian / ARM Deployment Guide](docs/armbian-deploy.md)
+
+### Docker
+
+If you already use Docker or Compose, keep README as the overview and use the dedicated guide for commands and production examples.
+
+📖 Full guide: [Docker Deployment Guide](docs/docker-deploy.md)
+
 ## Features
 
 ### Dashboard & Monitoring
@@ -97,45 +163,11 @@ ClawPanel is a visual management panel for the [OpenClaw](https://openclaw.ai) A
 - **Network Proxy** — Configure HTTP/SOCKS proxy for all outbound requests
 - **Session Management** — Secure session tokens with expiration
 
-## Installation
-
-### Desktop App (Windows / macOS / Linux)
-
-Download the latest installer from [GitHub Releases](https://github.com/cangerx/clawpanel/releases/latest):
-
-| Platform | Download |
-|----------|----------|
-| **Windows** | `.exe` installer (recommended) or `.msi` |
-| **macOS Apple Silicon** | `.dmg` (aarch64) |
-| **macOS Intel** | `.dmg` (x64) |
-| **Linux** | `.AppImage` / `.deb` / `.rpm` |
-
-### Web Version (No Rust/Tauri Required)
-
-For headless servers, Raspberry Pi, ARM boards, or Docker:
-
-```bash
-git clone https://github.com/cangerx/clawpanel.git
-cd clawpanel
-npm install
-npm run serve
-# Open http://localhost:1420 in your browser
-```
-
-### ARM / Embedded Device Support
-
-ClawPanel provides a **pure Web deployment mode** (zero GUI dependency), natively compatible with ARM64 boards:
-
-- **Orange Pi / Raspberry Pi / RK3588** — `npm run serve` to run
-- **Docker ARM64** — `docker run ghcr.io/qingchencloud/openclaw:latest`
-- **Armbian / Debian / Ubuntu Server** — Auto-detect architecture
-- No Rust / Tauri / GUI needed — **only Node.js 18+ required**
-
 ## Quick Start
 
 1. Install and open ClawPanel
-2. First run auto-detects Node.js environment and OpenClaw CLI
-3. If OpenClaw is not installed, click one-click install (R2 CDN accelerated)
+2. On first run, it auto-detects your Node.js environment and OpenClaw CLI
+3. If OpenClaw is not installed, click one-click install
 4. After installation, the dashboard loads automatically
 
 > **Requirements**: Node.js 18+ (22 LTS recommended)
@@ -162,10 +194,25 @@ npm install
 
 # Desktop development (Tauri)
 npm run tauri dev
+```
 
-# Web-only development
+### Web Development (No Rust/Tauri Required)
+
+If you only want frontend development or manual source-based Web runs, you do not need Rust:
+
+```bash
+# Development mode with hot reload
+npm run dev
+# Open http://localhost:1420
+
+# Build production assets
+npm run build
+
+# Manually serve the built Web app
 npm run serve
 ```
+
+`npm run serve` here is for **development or manual self-managed runs**. For Linux servers, ARM devices, or long-running production installs, use the `deploy.sh` installation entry point in the Installation section above.
 
 ## Contributing
 

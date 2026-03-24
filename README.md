@@ -37,27 +37,36 @@ ClawPanel 是 [OpenClaw](https://github.com/1186258278/OpenClawChineseTranslatio
 
 ### 🔥 开发板 / 嵌入式设备支持
 
-ClawPanel 提供**纯 Web 版部署模式**（零 GUI 依赖），天然兼容 ARM64 开发板和嵌入式设备：
+ClawPanel 提供**纯 Web 部署模式**（零 GUI 依赖），适合 ARM64 开发板和嵌入式设备：
 
-- **Orange Pi / 树莓派 / RK3588** 等 ARM64 板子 — `npm run serve` 即可运行
-- **Docker ARM64 镜像** — `docker run ghcr.io/qingchencloud/openclaw:latest` 开箱即用
-- **Armbian / Debian / Ubuntu Server** — 一键部署脚本自动检测架构
+- **Orange Pi / 树莓派 / RK3588** 等 ARM64 板子 — 推荐走 Linux Web 一键部署入口 `deploy.sh`
+- **Armbian / Debian / Ubuntu Server** — 统一使用根目录 `deploy.sh`，脚本会自动检测架构并选择后台运行方式
+- **Docker ARM64 环境** — 详见 [Docker 部署指南](docs/docker-deploy.md)
 - 无需 Rust / Tauri / 图形界面，**只要有 Node.js 18+ 就能跑**
 
-> 📖 详见 [Armbian 部署指南](docs/armbian-deploy.md) | [Web 版开发说明](#web-开发版无需-rusttauri)
+> 📖 ARM 设备详见 [Armbian 部署指南](docs/armbian-deploy.md)；Linux 服务器通用入口见 [Linux 部署指南](docs/linux-deploy.md)
 
-## 下载安装
+## 安装方式
 
-前往 [Releases](https://github.com/cangerx/clawpanel/releases/latest) 页面下载最新版本，根据你的系统选择对应安装包：
+首页只保留安装总览。按你的使用场景选择对应入口：
 
-### macOS
+### Desktop App
+
+#### Windows
+
+| 格式 | 安装包 | 说明 |
+|------|--------|------|
+| EXE 安装器 | `ClawPanel_x.x.x_x64-setup.exe` | 推荐，双击安装 |
+| MSI 安装器 | `ClawPanel_x.x.x_x64_en-US.msi` | 企业部署 / 静默安装 |
+
+#### macOS
 
 | 芯片 | 安装包 | 说明 |
 |------|--------|------|
 | Apple Silicon (M1/M2/M3/M4) | `ClawPanel_x.x.x_aarch64.dmg` | 2020 年末及之后的 Mac |
 | Intel | `ClawPanel_x.x.x_x64.dmg` | 2020 年及之前的 Mac |
 
-> 不确定芯片类型？点击左上角  → 关于本机，查看「芯片」一栏。
+> 不确定芯片类型？点击左上角 → 关于本机，查看「芯片」一栏。
 
 安装方式：打开 `.dmg` 文件，**先将 ClawPanel 拖入「应用程序」文件夹**，再双击打开。
 
@@ -74,14 +83,7 @@ ClawPanel 提供**纯 Web 版部署模式**（零 GUI 依赖），天然兼容 A
 > sudo xattr -rd com.apple.quarantine ~/Downloads/ClawPanel.app
 > ```
 
-### Windows
-
-| 格式 | 安装包 | 说明 |
-|------|--------|------|
-| EXE 安装器 | `ClawPanel_x.x.x_x64-setup.exe` | 推荐，双击安装 |
-| MSI 安装器 | `ClawPanel_x.x.x_x64_en-US.msi` | 企业部署 / 静默安装 |
-
-### Linux
+#### Linux Desktop
 
 | 格式 | 安装包 | 说明 |
 |------|--------|------|
@@ -89,33 +91,28 @@ ClawPanel 提供**纯 Web 版部署模式**（零 GUI 依赖），天然兼容 A
 | DEB | `ClawPanel_x.x.x_amd64.deb` | Debian / Ubuntu：`sudo dpkg -i *.deb` |
 | RPM | `ClawPanel-x.x.x-1.x86_64.rpm` | Fedora / RHEL：`sudo rpm -i *.rpm` |
 
-### Linux 服务器（Web 版）
+### Linux 服务器 / Web
 
-没有桌面环境？一键安装或更新 ClawPanel Web 版，通过浏览器远程管理 OpenClaw：
+没有桌面环境？推荐使用统一安装脚本部署或更新 ClawPanel Web 版：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/cangerx/clawpanel/main/deploy.sh | bash
 ```
 
-默认安装到 `~/.clawpanel-web`，默认监听 `1420` 端口；再次执行同一命令会拉取并安装最新主线版本。
-
-部署完成后访问 `http://服务器IP:1420`，功能与桌面版一致。
+脚本会自动选择最合适的后台运行方式（`systemd` / `systemd --user` / `nohup`），并输出访问地址、状态命令和日志命令。
 
 📖 详细教程见 [Linux 部署指南](docs/linux-deploy.md)
 
-### Docker 部署
+### ARM / 嵌入式
 
-```bash
-docker run -d --name clawpanel --restart unless-stopped \
-  -p 1420:1420 -v clawpanel-data:/root/.openclaw \
-  node:22-slim \
-  sh -c "apt-get update && apt-get install -y git && \
-    npm install -g @qingchencloud/openclaw-zh --registry https://registry.npmmirror.com && \
-    git clone https://github.com/cangerx/clawpanel.git /app && \
-    cd /app && npm install && npm run build && npm run serve"
-```
+ARM64 设备同样走 **Web 模式**，不使用桌面安装包。推荐直接使用上面的 `deploy.sh` 入口；如果你只是本地手动运行源码，再参考下方 [Web 开发版（无需 Rust/Tauri）](#web-开发版无需-rusttauri)。
 
-📖 详细教程见 [Docker 部署指南](docs/docker-deploy.md)（含 Compose、自定义镜像、Nginx 反向代理等）
+📖 详细教程见 [Armbian 部署指南](docs/armbian-deploy.md)
+
+### Docker
+
+如果你已经有 Docker / Compose 环境，README 只保留入口说明，详细命令和编排示例统一见 [Docker 部署指南](docs/docker-deploy.md)。
+
 
 ## 功能特性
 
@@ -385,7 +382,7 @@ npm run tauri build -- --bundles nsis
 
 ### Web 开发版（无需 Rust/Tauri）
 
-如果你只想开发前端或部署 Web 版，**不需要安装 Rust**：
+如果你只想开发前端，或手动运行源码版 Web 界面，**不需要安装 Rust**：
 
 ```bash
 # 克隆并安装
@@ -400,14 +397,16 @@ npm run dev
 # 构建生产版本
 npm run build
 
-# 启动 Web 服务器（Headless，适用于 Linux/ARM/Docker）
+# 手动启动已构建的 Web 服务（本地调试 / 手动运行）
 npm run serve
 # 默认监听 0.0.0.0:1420，支持 --port 和 --host 参数
 ```
 
+这里的 `npm run serve` 属于**开发 / 手动运行方式**；如果是 Linux 服务器、ARM 设备或长期运行环境，推荐使用上方安装章节中的 `deploy.sh` 统一部署入口。
+
 Web 版功能与桌面版一致，后端通过 `scripts/dev-api.js` 调用本机 OpenClaw CLI 实现。
 
-> **ARM/Armbian 用户**：Web 模式天然兼容 ARM64 设备，详见 [Armbian 部署指南](docs/armbian-deploy.md)。
+> **ARM/Armbian 用户**：生产部署请优先参考 [Armbian 部署指南](docs/armbian-deploy.md)。
 
 ## 快速上手
 
@@ -448,73 +447,17 @@ Web 版功能与桌面版一致，后端通过 `scripts/dev-api.js` 调用本机
 
 ---
 
-## Web 版部署指南
+## Linux 服务器部署
 
-Web 版适用于 Linux 服务器（无桌面环境），通过浏览器远程管理 OpenClaw。
-
-### 环境要求
-
-- **Node.js** >= 18（推荐 22 LTS）
-- **Git**（用于 OpenClaw 依赖安装）
-- **端口** 1420（ClawPanel）+ 18789（Gateway）
-
-### 一键部署
+Linux 服务器推荐使用统一入口 `deploy.sh` 进行安装或更新：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/cangerx/clawpanel/main/deploy.sh | bash
 ```
 
-默认安装到 `~/.clawpanel-web`，默认监听 `1420` 端口；重复执行同一命令即可更新到最新主线版本。
+脚本会自动处理下载、依赖安装、生产构建，并优先选择 `systemd`、`systemd --user` 或 `nohup` 作为后台运行方式。
 
-部署完成后访问 `http://服务器IP:1420`。
-
-### 安全注意事项
-
-> ⚠️ **公网暴露风险**：Web 版默认监听所有网卡。请务必：
-
-1. **设置访问密码** — 首次登录会提示修改默认密码，或在「安全设置」页面配置
-2. **防火墙限制** — 仅开放 1420 端口给可信 IP
-3. **Nginx 反向代理 + HTTPS** — 生产环境强烈建议使用 HTTPS
-
-<details>
-<summary><strong>Nginx 反向代理配置示例</strong></summary>
-
-```nginx
-server {
-    listen 443 ssl;
-    server_name openclaw.example.com;
-
-    ssl_certificate /path/to/cert.pem;
-    ssl_certificate_key /path/to/key.pem;
-
-    location / {
-        proxy_pass http://127.0.0.1:1420;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-
-    # WebSocket 支持（实时聊天需要）
-    location /ws {
-        proxy_pass http://127.0.0.1:18789;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-    }
-}
-```
-
-</details>
-
-### API Key 安全
-
-- API Key 存储在服务器的 `~/.openclaw/openclaw.json` 中，**不会**传输到外部
-- 建议为 `~/.openclaw/` 目录设置 `chmod 700` 权限
-- 多人共用时，每人应使用独立的 OpenClaw 实例
-
----
+📖 详细环境变量、反向代理和故障排查，请见 [Linux 部署指南](docs/linux-deploy.md)
 
 ## 消息渠道配置
 

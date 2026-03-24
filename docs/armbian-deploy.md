@@ -21,14 +21,10 @@ Web 模式是纯 Node.js 服务，零 GUI 依赖，最适合 ARM 板。
 ### 一键部署
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/cangerx/clawpanel/main/scripts/linux-deploy.sh | bash
+curl -fsSL https://raw.githubusercontent.com/cangerx/clawpanel/main/deploy.sh | bash
 ```
 
-国内网络推荐使用 Gitee 镜像：
-
-```bash
-curl -fsSL https://gitee.com/QtCodeCreators/clawpanel/raw/main/scripts/linux-deploy.sh | bash
-```
+国内网络推荐优先使用 GitHub 主入口；旧的 `scripts/linux-deploy.sh` 现在只是兼容包装层，也会转发到根目录 `deploy.sh`。
 
 ### 手动部署
 

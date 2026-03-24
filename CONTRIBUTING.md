@@ -133,7 +133,7 @@ clawpanel/
 │   ├── dev.sh                  #   macOS/Linux 开发启动
 │   ├── dev-api.js              #   Vite 插件：Web 模式真实后端 API
 │   ├── build.sh                #   macOS/Linux 编译与打包
-│   ├── linux-deploy.sh         #   Linux 服务器一键部署
+│   ├── linux-deploy.sh         #   兼容包装层（转发到根目录 deploy.sh）
 │   └── sync-version.js         #   版本号同步脚本
 ├── docs/                       # 文档与截图
 │   ├── index.html              #   官网（claw.qt.cool）
@@ -145,6 +145,7 @@ clawpanel/
 │   └── release.yml             #   发布构建（tag → 全平台打包）
 ├── .windsurf/workflows/        # Cascade AI 工作流
 │   └── release.md              #   发版工作流指令
+├── deploy.sh                    # 统一部署入口（Linux/ARM Web 安装主入口）
 ├── package.json                # 前端依赖 + 版本号（唯一真相源）
 ├── vite.config.js              # Vite 配置
 ├── CHANGELOG.md                # 更新日志
@@ -321,7 +322,8 @@ ClawPanel 面板自身的配置文件，独立于 OpenClaw：
 | `scripts/dev.sh` | macOS/Linux 开发启动（清理旧进程 → 启动 Vite 或 Tauri） |
 | `scripts/dev-api.js` | Vite 插件，Web 模式的 Node.js 后端（API + 认证中间件） |
 | `scripts/build.sh` | macOS/Linux 构建脚本（支持 `check` / `release` 模式） |
-| `scripts/linux-deploy.sh` | Linux 服务器一键部署（安装依赖 → 克隆仓库 → systemd 服务） |
+| `deploy.sh` | Linux/ARM Web 部署的规范入口（自动选择 `systemd` / `systemd --user` / `nohup`） |
+| `scripts/linux-deploy.sh` | 兼容包装层，转发到根目录 `deploy.sh` |
 | `scripts/sync-version.js` | 版本号同步（`package.json` → 其他 4 个文件） |
 
 ---
@@ -456,15 +458,15 @@ ClawPanel 支持访问密码保护，**Web 模式和 Tauri 桌面端均可启用
 
 ### 2. Linux 服务器（Web 版）
 
-一键部署脚本，适用于无桌面环境的 Linux 服务器：
+统一部署入口，适用于无桌面环境的 Linux 服务器和 ARM 设备：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/cangerx/clawpanel/main/scripts/linux-deploy.sh | bash
+curl -fsSL https://raw.githubusercontent.com/cangerx/clawpanel/main/deploy.sh | bash
 ```
 
-部署后通过 `http://服务器IP:1420` 访问，自动生成默认密码。
+`scripts/linux-deploy.sh` 仅保留为兼容包装层，维护和文档更新时应始终以根目录 `deploy.sh` 作为主入口。
 
-详见 [Linux 部署指南](docs/linux-deploy.md)。
+部署后通过 `http://服务器IP:1420` 访问，详见 [Linux 部署指南](docs/linux-deploy.md)。
 
 ### 3. Docker
 

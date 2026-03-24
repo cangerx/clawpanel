@@ -2,7 +2,7 @@
 
 本文介绍如何用 Docker 部署 **ClawPanel Web 版**，通过浏览器远程管理 OpenClaw。
 
-> **ClawPanel** 有 Win/Mac 桌面客户端，但 Linux 没有桌面版。Docker 部署让你在任何有 Docker 的机器上一键跑起 ClawPanel Web 管理面板。
+> **ClawPanel** 提供 Windows / macOS / Linux 桌面安装包；Docker 部署面向已有容器环境的 Web 管理场景。
 
 ---
 
