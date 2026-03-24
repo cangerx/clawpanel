@@ -18,6 +18,7 @@ REF="${CLAWPANEL_REF:-main}"
 PORT="${CLAWPANEL_PORT:-1420}"
 HOST="${CLAWPANEL_HOST:-0.0.0.0}"
 DOWNLOAD_TIMEOUT="${CLAWPANEL_DOWNLOAD_TIMEOUT:-600}"
+SOURCE_PREFERENCE_RAW="${CLAWPANEL_SOURCE:-auto}"
 INSTALLER_VERSION="v4"
 
 UNAME_S="$(uname -s 2>/dev/null || printf 'unknown')"
@@ -89,6 +90,9 @@ STOP_CMD=''
 MANUAL_START_CMD=''
 MODE_LABEL='手动启动'
 SERVICE_NOTE=''
+SOURCE_PREFERENCE='auto'
+SOURCE_PRIMARY_LABEL='GitHub'
+SOURCE_SECONDARY_LABEL='Gitee'
 
 cleanup() {
   [ -n "$TMP_DIR" ] && [ -d "$TMP_DIR" ] && rm -rf "$TMP_DIR"
@@ -320,20 +324,70 @@ detect_ip() {
   printf '%s' "$ip"
 }
 
+normalize_source_preference() {
+  local requested locale
+  requested="$(printf '%s' "$SOURCE_PREFERENCE_RAW" | tr '[:upper:]' '[:lower:]')"
+  locale="$(printf '%s' "${LC_ALL:-${LC_CTYPE:-${LANG:-}}}" | tr '[:upper:]' '[:lower:]')"
+
+  case "$requested" in
+    ''|auto)
+      case "$locale" in
+        *zh_cn*|*zh-hans*|*zh*|*cn*) SOURCE_PREFERENCE='gitee' ;;
+        *) SOURCE_PREFERENCE='github' ;;
+      esac
+      ;;
+    github|gitee)
+      SOURCE_PREFERENCE="$requested"
+      ;;
+    cn|china|domestic)
+      SOURCE_PREFERENCE='gitee'
+      ;;
+    global|intl|international|overseas)
+      SOURCE_PREFERENCE='github'
+      ;;
+    *)
+      log_warn "未知的 CLAWPANEL_SOURCE=$SOURCE_PREFERENCE_RAW，已回退为 auto"
+      case "$locale" in
+        *zh_cn*|*zh-hans*|*zh*|*cn*) SOURCE_PREFERENCE='gitee' ;;
+        *) SOURCE_PREFERENCE='github' ;;
+      esac
+      ;;
+  esac
+
+  if [ "$SOURCE_PREFERENCE" = "gitee" ]; then
+    SOURCE_PRIMARY_LABEL='Gitee'
+    SOURCE_SECONDARY_LABEL='GitHub'
+  else
+    SOURCE_PRIMARY_LABEL='GitHub'
+    SOURCE_SECONDARY_LABEL='Gitee'
+  fi
+}
+
 resolve_target() {
   if [ "$REF" = "main" ]; then
-    DOWNLOAD_URL="$GITHUB_ARCHIVE_BASE/heads/main.tar.gz"
-    DOWNLOAD_URL_ALT="$GITEE_ARCHIVE_BASE?ref=main&format=tgz"
+    if [ "$SOURCE_PREFERENCE" = "gitee" ]; then
+      DOWNLOAD_URL="$GITEE_ARCHIVE_BASE?ref=main&format=tgz"
+      DOWNLOAD_URL_ALT="$GITHUB_ARCHIVE_BASE/heads/main.tar.gz"
+    else
+      DOWNLOAD_URL="$GITHUB_ARCHIVE_BASE/heads/main.tar.gz"
+      DOWNLOAD_URL_ALT="$GITEE_ARCHIVE_BASE?ref=main&format=tgz"
+    fi
     VERSION_LABEL="main"
   else
-    DOWNLOAD_URL="$GITHUB_ARCHIVE_BASE/tags/$REF.tar.gz"
-    DOWNLOAD_URL_ALT="$GITEE_ARCHIVE_BASE?ref=$REF&format=tgz"
+    if [ "$SOURCE_PREFERENCE" = "gitee" ]; then
+      DOWNLOAD_URL="$GITEE_ARCHIVE_BASE?ref=$REF&format=tgz"
+      DOWNLOAD_URL_ALT="$GITHUB_ARCHIVE_BASE/tags/$REF.tar.gz"
+    else
+      DOWNLOAD_URL="$GITHUB_ARCHIVE_BASE/tags/$REF.tar.gz"
+      DOWNLOAD_URL_ALT="$GITEE_ARCHIVE_BASE?ref=$REF&format=tgz"
+    fi
     VERSION_LABEL="$REF"
   fi
 
   log_info "安装目标: $VERSION_LABEL"
   log_info "安装目录: $INSTALL_DIR"
   log_info "监听地址: $HOST:$PORT"
+  log_info "源码渠道: 优先 $SOURCE_PRIMARY_LABEL，失败回退 $SOURCE_SECONDARY_LABEL"
 }
 
 download_archive() {
@@ -369,18 +423,18 @@ fetch_source() {
     [ -s "$tmp_file" ] || return 1
     mkdir -p "$tmp_extract"
     tar xzf "$tmp_file" -C "$tmp_extract" --strip-components=1
-    log_ok "源码包下载并解压完成（GitHub）"
+    log_ok "源码包下载并解压完成（$SOURCE_PRIMARY_LABEL）"
     return 0
   fi
 
   if [ -n "$DOWNLOAD_URL_ALT" ]; then
-    log_warn "GitHub 源码包下载失败，尝试使用 Gitee 镜像"
+    log_warn "$SOURCE_PRIMARY_LABEL 源码包下载失败，尝试使用 $SOURCE_SECONDARY_LABEL 镜像"
     rm -f "$tmp_file"
     if download_archive "$DOWNLOAD_URL_ALT" "$tmp_file"; then
       [ -s "$tmp_file" ] || return 1
       mkdir -p "$tmp_extract"
       tar xzf "$tmp_file" -C "$tmp_extract" --strip-components=1
-      log_ok "源码包下载并解压完成（Gitee）"
+      log_ok "源码包下载并解压完成（$SOURCE_SECONDARY_LABEL）"
       return 0
     fi
   fi
@@ -398,6 +452,29 @@ clone_source_fallback() {
 
   log_warn "源码包下载失败，尝试使用 git clone 回退"
   rm -rf "$tmp_extract"
+
+  if [ "$SOURCE_PREFERENCE" = "gitee" ]; then
+    if [ "$REF" = "main" ]; then
+      if git clone --depth 1 "$GITEE_REPO_URL.git" "$tmp_extract"; then
+        log_ok "git clone 回退成功（Gitee）"
+        return 0
+      fi
+      log_warn "Gitee clone 失败，尝试使用 GitHub 镜像"
+      git clone --depth 1 "$GITHUB_REPO_URL.git" "$tmp_extract"
+      log_ok "git clone 回退成功（GitHub）"
+      return 0
+    fi
+
+    if git clone --depth 1 --branch "$REF" "$GITEE_REPO_URL.git" "$tmp_extract"; then
+      log_ok "git clone 回退成功（Gitee）"
+      return 0
+    fi
+
+    log_warn "Gitee clone 失败，尝试使用 GitHub 镜像"
+    git clone --depth 1 --branch "$REF" "$GITHUB_REPO_URL.git" "$tmp_extract"
+    log_ok "git clone 回退成功（GitHub）"
+    return 0
+  fi
 
   if [ "$REF" = "main" ]; then
     if git clone --depth 1 "$GITHUB_REPO_URL.git" "$tmp_extract"; then
@@ -734,6 +811,7 @@ main() {
 
   log_step "检查运行环境"
   validate_runtime_inputs
+  normalize_source_preference
   require_cmd node || { log_error "需要 Node.js 18+，请先安装: https://nodejs.org/"; exit 1; }
   require_cmd npm || { log_error "需要 npm，请先安装 Node.js/npm"; exit 1; }
   require_cmd tar || { log_error "需要 tar 命令用于解压源码包"; exit 1; }
