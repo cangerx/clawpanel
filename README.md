@@ -1,3 +1,7 @@
+
+
+# ClawPanel
+
 <p align="center">
   <img src="public/images/logo-brand.png" width="360" alt="Cpanel">
 </p>
@@ -49,10 +53,6 @@ Cpanel 提供**纯 Web 部署模式**（零 GUI 依赖），适合 ARM64 开发�
 > 📖 ARM 设备详见 [Armbian 部署指南](docs/armbian-deploy.md)；Linux 服务器通用入口见 [Linux 部署指南](docs/linux-deploy.md)
 
 ## 安装方式
-
-首页只保留安装总览。按你的使用场景选择对应入口：
-
-> **发版与下载说明**：海外下载与发版以 GitHub Releases 为主，国内同步发布到 Gitee，便于脚本下载和安装包获取。
 
 ### Desktop App
 
@@ -115,34 +115,23 @@ curl -fsSL https://gitee.com/cangerx/clawpanel/raw/main/deploy.sh | bash
 
 📖 详细教程见 [Linux 部署指南](docs/linux-deploy.md)
 
-### ARM / 嵌入式
-
-ARM64 设备同样走 **Web 模式**，不使用桌面安装包。推荐直接使用上面的 `deploy.sh` 入口；如果你只是本地手动运行源码，再参考下方 [Web 开发版（无需 Rust/Tauri）](#web-开发版无需-rusttauri)。
-
-📖 详细教程见 [Armbian 部署指南](docs/armbian-deploy.md)
-
 ### Docker
 
-如果你已经有 Docker / Compose 环境，README 只保留入口说明，详细命令和编排示例统一见 [Docker 部署指南](docs/docker-deploy.md)。
-
+如果你已经有 Docker / Compose 环境，详见 [Docker 部署指南](docs/docker-deploy.md)。
 
 ## 功能特性
 
-<p align="center">
-  <img src="docs/feature-showcase.gif" width="800" alt="功能矩阵">
-</p>
-
-- **🤖 AI 助手（全新·重磅）** — 内置独立 AI 助手，4 种操作模式 + 8 大工具 + 交互式问答，详见下方 [AI 助手亮点](#-ai-助手亮点)
+- **🤖 AI 助手（全新·重磅）** — 内置独立 AI 助手，4 种操作模式 + 8 大工具 + 交互式问答
 - **🖼️ 图片识别** — 粘贴截图或拖拽图片，AI 自动识别分析，支持多模态图文混排对话
 - **仪表盘** — 系统概览，服务状态实时监控，快捷操作
 - **服务管理** — OpenClaw 启停控制、版本检测与一键升级、Gateway 安装/卸载、配置备份与还原
 - **模型配置** — 多服务商管理、模型增删改查、批量连通性测试、延迟检测、拖拽排序、自动保存+撤销
 - **网关配置** — 端口、访问权限（本机/局域网）、认证 Token、Tailscale 组网
-- **消息渠道（18 平台）** — Telegram、Discord、飞书、钉钉、QQ、微信、企业微信、WhatsApp、Slack、Signal、Google Chat、iMessage (BlueBubbles)、LINE、Teams、Matrix、Mattermost、IRC、Twitch，支持同平台多 Agent 绑定
+- **消息渠道（18 平台）** — Telegram、Discord、飞书、钉钉、QQ、微信、企业微信、WhatsApp、Slack、Signal、Google Chat、iMessage (BlueBubbles)、LINE、Teams、Matrix、Mattermost、IRC、Twitch
 - **通信与自动化** — 消息设置、广播策略、斜杠命令、Webhook、执行审批转发等高级配置
 - **使用情况** — Token 用量、API 费用、热门模型/服务商/工具排行、每日用量图表
 - **Agent 管理** — Agent 增删改查、身份编辑、模型配置、工作区管理
-- **聊天** — 流式响应、Markdown 渲染、会话管理、/fast /think /verbose /reasoning 命令、Compaction 状态指示
+- **聊天** — 流式响应、Markdown 渲染、会话管理、/fast /think /verbose /reasoning 命令
 - **定时任务** — Cron 定时执行，支持多渠道投递
 - **日志查看** — 多日志源实时查看与关键词搜索
 - **记忆管理** — 记忆文件查看/编辑、分类管理、ZIP 导出、Agent 切换
@@ -236,8 +225,6 @@ Cpanel 内置的 AI 助手不只是聊天机器人——它能**直接操作你�
 
 ### 四种操作模式
 
-一键切换，界面颜色随模式变化，清晰感知当前权限状态：
-
 | 模式 | 图标 | 工具 | 写文件 | 确认 | 适用场景 |
 |------|------|------|--------|------|---------|
 | **聊天** | 💬 | ❌ | ❌ | — | 纯问答，不触碰系统 |
@@ -245,41 +232,20 @@ Cpanel 内置的 AI 助手不只是聊天机器人——它能**直接操作你�
 | **执行** | ⚡ | ✅ | ✅ | ✅ | 正常干活，危险操作弹确认 |
 | **无限** | ∞ | ✅ | ✅ | ❌ | 全自动，工具调用不弹窗 |
 
-设置中还有**工具开关**（终端/文件），优先级高于模式——关掉终端，即使无限模式也调不了命令。
-
 ### 八大工具
 
-| 工具 | 功能 | 示例 |
-|------|------|------|
-| `ask_user` | 向用户提问（单选/多选/文本） | "选择要提交到哪个仓库？" |
-| `get_system_info` | 获取 OS、架构、主目录 | 自动判断该用 PowerShell 还是 Bash |
-| `run_command` | 执行 Shell 命令 | 重启 Gateway、查看日志 |
-| `read_file` | 读取文件 | 读取 openclaw.json 分析配置 |
-| `write_file` | 写入文件 | 修复配置错误、生成脚本 |
-| `list_directory` | 浏览目录 | 列出 .openclaw/ 结构 |
-| `list_processes` | 查看进程 | 检查 Gateway 是否在运行 |
-| `check_port` | 检测端口占用 | 18789 端口被谁占了？ |
-
-### 交互式问答（ask_user）
-
-AI 可以通过 `ask_user` 工具向你提问，支持三种交互方式：
-
-- **单选** — 从多个方案中选一个，还能输入自定义答案
-- **多选** — 勾选多项，比如"选择要检查的组件"
-- **文本** — 自由输入，比如"描述你遇到的问题"
-
-AI 等你回答后才会继续操作，实现真正的**人机协作**。
-
-### PR 助手 & Bug 报告
-
-发现 Bug？AI 不只是告诉你怎么修——它**直接帮你修**：
-
-1. 🐛 **提交 Bug 报告** — AI 自动收集系统环境、读取错误日志，按标准模板整理成 GitHub Issue，你复制粘贴就能提交
-2. 🔀 **PR 助手** — AI 分析 Bug 根因 → 定位代码 → 生成修复方案 → 通过 `run_command` 执行 git 命令完成 Fork/Branch/Commit/Push，**用户只需点确认**
+| 工具 | 功能 |
+|------|------|
+| `ask_user` | 向用户提问（单选/多选/文本） |
+| `get_system_info` | 获取 OS、架构、主目录 |
+| `run_command` | 执行 Shell 命令 |
+| `read_file` | 读取文件 |
+| `write_file` | 写入文件 |
+| `list_directory` | 浏览目录 |
+| `list_processes` | 查看进程 |
+| `check_port` | 检测端口占用 |
 
 ### 内置技能卡片
-
-欢迎页提供一键触发的常用技能：
 
 | 技能 | 功能 |
 |------|------|
@@ -304,26 +270,18 @@ AI 等你回答后才会继续操作，实现真正的**人机协作**。
 ```
 clawpanel/
 ├── src/                    # 前端源码
-│   ├── pages/              # 10 个页面模块
-│   ├── components/         # 通用组件（侧边栏、弹窗、Toast）
-│   ├── lib/                # 工具库（Tauri API 封装、主题）
+│   ├── pages/              # 页面模块
+│   ├── components/         # 通用组件
+│   ├── lib/                # 工具库
 │   ├── style/              # 样式文件
-│   ├── router.js           # 路由
-│   └── main.js             # 入口
+│   └── router.js           # 路由
 ├── src-tauri/              # Rust 后端
-│   ├── src/                # Tauri 命令与业务逻辑
-│   ├── Cargo.toml          # Rust 依赖
-│   └── tauri.conf.json     # Tauri 配置
+│   ├── src/commands/       # Tauri 命令
+│   └── Cargo.toml          # Rust 依赖
 ├── public/                 # 静态资源
 ├── scripts/                # 开发与构建脚本
-│   ├── dev.sh              # 开发模式启动
-│   └── build.sh            # 编译与打包
-├── .github/workflows/      # CI/CD
-│   ├── ci.yml              # 持续集成（push/PR 自动检查）
-│   └── release.yml         # 发布构建（全平台打包）
-├── index.html              # HTML 入口
-├── vite.config.js          # Vite 配置
-└── package.json            # 前端依赖
+├── deploy.sh               # Linux 一键部署
+└── index.html              # HTML 入口
 ```
 
 ## 从源码构建
@@ -332,13 +290,13 @@ clawpanel/
 
 - [Node.js](https://nodejs.org/) >= 18
 - [Rust](https://www.rust-lang.org/tools/install) (stable)
-- Tauri v2 系统依赖（参考 [Tauri 官方文档](https://v2.tauri.app/start/prerequisites/)）
+- Tauri v2 系统依赖
 
 ### 安装与开发
 
 ```bash
 git clone https://github.com/cangerx/clawpanel.git
-# 国内网络可改用 Gitee 镜像：git clone https://gitee.com/cangerx/clawpanel.git
+# 国内网络可改用 Gitee 镜像
 cd clawpanel
 npm install
 ```
@@ -349,7 +307,7 @@ npm install
 # 启动完整 Tauri 桌面应用
 ./scripts/dev.sh
 
-# 仅启动 Vite 前端（浏览器调试，使用 mock 数据）
+# 仅启动 Vite 前端（浏览器调试）
 ./scripts/dev.sh web
 ```
 
@@ -359,101 +317,49 @@ npm install
 # 启动完整 Tauri 桌面应用
 npm run tauri dev
 
-# 仅启动 Vite 前端（浏览器调试，使用 mock 数据）
+# 仅启动 Vite 前端
 npm run dev
 ```
 
 ### 构建
 
-#### macOS / Linux
-
 ```bash
-# 编译 debug 版本
-./scripts/build.sh
-
-# 仅检查 Rust 编译（最快，不生成产物）
-./scripts/build.sh check
-
-# 编译正式发布版本（含打包）
-./scripts/build.sh release
-```
-
-#### Windows
-
-```powershell
-# 检查 Rust 编译
-cd src-tauri && cargo check
-
 # 编译正式发布版本
-npm run tauri build
-
-# 指定打包格式（NSIS 安装器）
-npm run tauri build -- --bundles nsis
+./scripts/build.sh release
 ```
 
 产物位于 `src-tauri/target/release/` 目录。
 
 ### Web 开发版（无需 Rust/Tauri）
 
-如果你只想开发前端，或手动运行源码版 Web 界面，**不需要安装 Rust**：
-
 ```bash
-# 克隆并安装
-git clone https://github.com/cangerx/clawpanel.git
-# 国内网络可改用 Gitee 镜像：git clone https://gitee.com/cangerx/clawpanel.git
-cd clawpanel
-npm install
-
-# 开发模式（热更新，自带 API mock 后端）
+# 开发模式（热更新）
 npm run dev
-# 浏览器打开 http://localhost:1420
 
 # 构建生产版本
 npm run build
 
-# 手动启动已构建的 Web 服务（本地调试 / 手动运行）
+# 手动启动 Web 服务
 npm run serve
-# 默认监听 0.0.0.0:1420，支持 --port 和 --host 参数
 ```
 
-这里的 `npm run serve` 属于**开发 / 手动运行方式**；如果是 Linux 服务器、ARM 设备或长期运行环境，推荐使用上方安装章节中的 `deploy.sh` 统一部署入口。
-
-Web 版功能与桌面版一致，后端通过 `scripts/dev-api.js` 调用本机 OpenClaw CLI 实现。
-
-> **ARM/Armbian 用户**：生产部署请优先参考 [Armbian 部署指南](docs/armbian-deploy.md)。
-
 ## 快速上手
-
-安装完成后，按以下步骤即可开始使用：
 
 ### 1. 初始设置
 
 首次启动 Cpanel 会自动进入**初始设置**页面，引导你完成环境检测：
 
 - ✅ **Node.js** — 自动检测，未安装时提供一键安装
-- ✅ **Git** — 自动检测并配置 HTTPS 模式（解决 SSH 不通问题）
+- ✅ **Git** — 自动检测并配置 HTTPS 模式
 - ✅ **OpenClaw** — 一键安装，可选汉化版或原版
-
-> 所有步骤均有绿色勾标记，全部通过后点击「前往模型配置」。
 
 ### 2. 配置 AI 模型
 
-进入**模型配置**页面，添加至少一个 AI 服务商：
-
-| 服务商 | 获取 API Key |
-|--------|-------------|
-| DeepSeek | [platform.deepseek.com](https://platform.deepseek.com/) |
-| OpenAI | [platform.openai.com](https://platform.openai.com/) |
-| 阿里通义 | [dashscope.console.aliyun.com](https://dashscope.console.aliyun.com/) |
-| Ollama（本地） | 免费，无需 Key，安装后自动检测 |
-
-填入 `Base URL` 和 `API Key`，点击「测试连接」确认可用，然后保存。
+进入**模型配置**页面，添加至少一个 AI 服务商（DeepSeek、OpenAI、阿里通义、Ollama 等）。
 
 ### 3. 启动 Gateway
 
-前往**服务管理**页面，点击「启动」按钮启动 Gateway。状态变为绿色即可。
-
-> Gateway 是 OpenClaw 的核心服务，负责处理 AI 对话请求。
+前往**服务管理**页面，点击「启动」按钮启动 Gateway。
 
 ### 4. 开始聊天
 
@@ -531,8 +437,6 @@ Cpanel 支持将 AI 接入多种即时通讯平台，在「消息渠道」页面
 
 ### macOS 提示"已损坏，无法打开"
 
-没有苹果开发者签名，macOS Gatekeeper 会拦截。终端执行：
-
 ```bash
 sudo xattr -rd com.apple.quarantine /Applications/Cpanel.app
 ```
@@ -590,16 +494,8 @@ npm install -g @qingchencloud/openclaw-zh --registry https://registry.npmmirror.
 
 ### Gateway 启动失败
 
-常见原因和解决方案：
-
-| 症状 | 原因 | 解决 |
-|------|------|------|
-| 端口 18789 被占用 | 另一个 Gateway 进程残留 | 终端执行 `pkill -f openclaw` 后重启 |
-| 配置文件损坏 | openclaw.json 格式错误 | 前往「服务管理」→「从备份恢复」 |
-| 反复崩溃 | API Key 或模型配置异常 | 用 AI 助手「🔨 一键排障」自动诊断 |
-| 提示 "auth mode" 错误 | 认证配置不兼容 | 在「安全设置」重置 Gateway 认证 |
-
-如果仍无法解决，查看「日志查看」页面的 Gateway 日志获取详细错误信息。
+1. 检查端口 18789 是否被占用：`pkill -f openclaw` 后重启
+2. 查看「日志查看」页面的 Gateway 日志获取详细错误信息
 
 ### 模型连接超时 / 测试失败
 
