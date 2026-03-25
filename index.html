@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ClawPanel</title>
+  <title>Cpanel</title>
   <link rel="icon" href="/favicon.ico">
   <!-- 样式由 main.js 通过 Vite 统一加载 -->
   <style>
@@ -18,7 +18,7 @@
     #splash.hide { opacity: 0; visibility: hidden; pointer-events: none; }
     #splash .sp-logo {
       width: 56px; height: 56px; margin-bottom: 20px;
-      color: #6366f1; animation: sp-pulse 2s ease-in-out infinite;
+      color: #16a34a; animation: sp-pulse 2s ease-in-out infinite;
     }
     #splash .sp-name {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -28,11 +28,11 @@
     @media (prefers-color-scheme: dark) { #splash .sp-name { color: #e4e4e7; } }
     #splash .sp-bar {
       width: 120px; height: 3px; border-radius: 2px; overflow: hidden;
-      background: rgba(99, 102, 241, 0.15);
+      background: rgba(22, 163, 74, 0.15);
     }
     #splash .sp-bar-inner {
       width: 40%; height: 100%; border-radius: 2px;
-      background: #6366f1;
+      background: #16a34a;
       animation: sp-slide 1.2s ease-in-out infinite;
     }
     #splash .sp-site {
@@ -41,7 +41,7 @@
       font-size: 12px; color: #a1a1aa; letter-spacing: 0.3px;
     }
     #splash .sp-site a {
-      color: #6366f1; text-decoration: none;
+      color: #16a34a; text-decoration: none;
     }
     #splash .sp-site a:hover { text-decoration: underline; }
     @keyframes sp-slide {
@@ -62,11 +62,11 @@
       <path d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z"/>
       <path d="M18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z"/>
     </svg>
-    <div class="sp-name">ClawPanel</div>
+    <div class="sp-name">Cpanel</div>
     <div class="sp-bar"><div class="sp-bar-inner"></div></div>
     <div class="sp-site"><a href="https://api.772.ee" target="_blank">苍洱API</a></div>
   </div>
-  <script>setTimeout(function(){var s=document.getElementById('splash');if(s){var app=document.getElementById('content');if(app&&app.children.length>0){s.classList.add('hide');setTimeout(function(){s.remove()},500)}else{s.innerHTML='<div style="text-align:center;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif"><div style="font-size:40px;margin-bottom:12px">\u26A0\uFE0F</div><div style="font-size:16px;font-weight:600;color:#18181b;margin-bottom:8px">\u9875\u9762\u52A0\u8F7D\u5931\u8D25</div><div style="font-size:12px;color:#71717a;margin-bottom:16px;line-height:1.6">\u53EF\u80FD\u539F\u56E0\uFF1AWebView2 \u7F3A\u5931\u6216\u7248\u672C\u8FC7\u4F4E<br>\u8BF7\u5B89\u88C5\u6700\u65B0\u7248 <a href="https://go.microsoft.com/fwlink/p/?LinkId=2124703" style="color:#6366f1">WebView2 Runtime</a></div><button onclick="location.reload()" style="padding:6px 16px;border-radius:6px;border:none;background:#6366f1;color:#fff;font-size:12px;cursor:pointer">\u5237\u65B0\u91CD\u8BD5</button></div>'}}},8000)</script>
+  <script>setTimeout(function(){var s=document.getElementById('splash');if(s){var app=document.getElementById('content');if(app&&app.children.length>0){s.classList.add('hide');setTimeout(function(){s.remove()},500)}else{s.innerHTML='<div style="text-align:center;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif"><div style="font-size:40px;margin-bottom:12px">\u26A0\uFE0F</div><div style="font-size:16px;font-weight:600;color:#18181b;margin-bottom:8px">\u9875\u9762\u52A0\u8F7D\u5931\u8D25</div><div style="font-size:12px;color:#71717a;margin-bottom:16px;line-height:1.6">\u53EF\u80FD\u539F\u56E0\uFF1AWebView2 \u7F3A\u5931\u6216\u7248\u672C\u8FC7\u4F4E<br>\u8BF7\u5B89\u88C5\u6700\u65B0\u7248 <a href="https://go.microsoft.com/fwlink/p/?LinkId=2124703" style="color:#16a34a">WebView2 Runtime</a></div><button onclick="location.reload()" style="padding:6px 16px;border-radius:6px;border:none;background:#16a34a;color:#fff;font-size:12px;cursor:pointer">\u5237\u65B0\u91CD\u8BD5</button></div>'}}},8000)</script>
 
   <div id="app">
     <aside id="sidebar"></aside>

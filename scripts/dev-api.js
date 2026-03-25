@@ -51,6 +51,22 @@ const PANEL_VERSION = (() => {
     return '0.0.0'
   }
 })()
+const EXTRA_BIN_DIRS = [
+  path.join(homedir(), '.local', 'bin'),
+  path.join(homedir(), '.npm-global', 'bin'),
+  path.join(homedir(), 'bin'),
+]
+function getCliEnv(extra = {}) {
+  const pathEntries = String(process.env.PATH || '').split(path.delimiter).filter(Boolean)
+  for (const dir of EXTRA_BIN_DIRS) {
+    if (fs.existsSync(dir) && !pathEntries.includes(dir)) pathEntries.unshift(dir)
+  }
+  return {
+    ...process.env,
+    ...extra,
+    PATH: pathEntries.join(path.delimiter),
+  }
+}
 const VERSION_POLICY_PATH = path.join(__dev_dirname, '..', 'openclaw-version-policy.json')
 const GIT_HTTPS_REWRITES = [
   'ssh://git@github.com/',
@@ -308,6 +324,63 @@ function getWechatRuntimeStatus() {
   else result.message = '微信原生插件尚未安装。'
 
   return result
+}
+
+function parseSkillDescription(skillMdPath) {
+  try {
+    const content = fs.readFileSync(skillMdPath, 'utf8')
+    if (!content.startsWith('---')) return ''
+    const end = content.indexOf('\n---', 3)
+    if (end < 0) return ''
+    const fm = content.slice(3, end)
+    for (const line of fm.split('\n')) {
+      const trimmed = line.trim()
+      if (trimmed.startsWith('description:')) {
+        return trimmed.slice('description:'.length).trim().replace(/^['"]|['"]$/g, '')
+      }
+    }
+  } catch {}
+  return ''
+}
+
+function scanLocalSkills() {
+  const roots = [
+    path.join(OPENCLAW_DIR, 'skills'),
+    path.join(homedir(), 'skills'),
+  ]
+  const seen = new Set()
+  const skills = []
+
+  for (const skillsDir of roots) {
+    if (!fs.existsSync(skillsDir)) continue
+    let entries = []
+    try { entries = fs.readdirSync(skillsDir, { withFileTypes: true }) } catch { continue }
+    for (const entry of entries) {
+      if (!entry.isDirectory() && !entry.isSymbolicLink()) continue
+      const name = String(entry.name || '').trim()
+      if (!name || seen.has(name)) continue
+      const skillDir = path.join(skillsDir, name)
+      const skillMd = path.join(skillDir, 'SKILL.md')
+      const description = fs.existsSync(skillMd) ? parseSkillDescription(skillMd) : ''
+      skills.push({
+        name,
+        description,
+        source: skillsDir === path.join(homedir(), 'skills') ? 'skillhub' : 'managed',
+        bundled: false,
+        eligible: true,
+        disabled: false,
+        blockedByAllowlist: false,
+        filePath: skillMd,
+      })
+      seen.add(name)
+    }
+  }
+
+  return {
+    skills,
+    source: 'local-scan',
+    cliAvailable: false,
+  }
 }
 
 function getWechatChannelConfig() {
@@ -898,6 +971,34 @@ function extractCliJson(text) {
   throw new Error('解析失败: 输出中未找到有效 JSON')
 }
 
+function runCliJsonCommand(command, options = {}) {
+  const { timeout, env, cwd } = options
+  const result = spawnSync(command, {
+    shell: true,
+    encoding: 'utf8',
+    timeout,
+    env,
+    cwd,
+  })
+  const stdout = String(result.stdout || '')
+  const stderr = String(result.stderr || '')
+  const combined = [stdout, stderr].filter(Boolean).join('\n')
+
+  if (result.error) {
+    if (combined) {
+      try { return extractCliJson(combined) } catch {}
+    }
+    throw result.error
+  }
+  if (result.status !== 0) {
+    if (combined) {
+      try { return extractCliJson(combined) } catch {}
+    }
+    throw new Error((stderr || stdout || `命令失败，退出码 ${result.status}`).trim())
+  }
+  return extractCliJson(combined)
+}
+
 // 配置缓存：避免每次请求同步读磁盘（TTL 2秒，写入时立即失效）
 let _panelConfigCache = null
 let _panelConfigCacheTime = 0
@@ -986,6 +1087,91 @@ function getUid() {
   return execSync('id -u').toString().trim()
 }
 
+function normalizeLegacyOpenclawConfig(input) {
+  const config = input && typeof input === 'object'
+    ? JSON.parse(JSON.stringify(input))
+    : {}
+
+  if (!config.models || typeof config.models !== 'object') config.models = {}
+  if (!config.models.providers || typeof config.models.providers !== 'object') config.models.providers = {}
+
+  const legacyProviders = config.providers
+  if (legacyProviders && typeof legacyProviders === 'object') {
+    for (const [providerId, legacy] of Object.entries(legacyProviders)) {
+      if (!legacy || typeof legacy !== 'object') continue
+      const hasUsefulData = !!(legacy.apiBaseUrl || legacy.apiKey || legacy.defaultModel || legacy.enabled)
+      if (!hasUsefulData) continue
+
+      const next = config.models.providers[providerId] && typeof config.models.providers[providerId] === 'object'
+        ? config.models.providers[providerId]
+        : {}
+
+      if (legacy.apiBaseUrl && !next.baseUrl) next.baseUrl = legacy.apiBaseUrl
+      if (legacy.apiKey && !next.apiKey) next.apiKey = legacy.apiKey
+      if (!next.api) next.api = providerId === 'anthropic' ? 'anthropic-messages' : 'openai-completions'
+      if (!Array.isArray(next.models)) next.models = []
+
+      const defaultModelId = String(legacy.defaultModel || '').trim()
+      if (defaultModelId && !next.models.some(m => (typeof m === 'string' ? m : m?.id) === defaultModelId)) {
+        next.models.push({ id: defaultModelId, name: defaultModelId })
+      }
+
+      config.models.providers[providerId] = next
+
+      if (defaultModelId && !config?.agents?.defaults?.model?.primary) {
+        if (!config.agents || typeof config.agents !== 'object') config.agents = {}
+        if (!config.agents.defaults || typeof config.agents.defaults !== 'object') config.agents.defaults = {}
+        if (!config.agents.defaults.model || typeof config.agents.defaults.model !== 'object') config.agents.defaults.model = {}
+        config.agents.defaults.model.primary = `${providerId}/${defaultModelId}`
+      }
+    }
+    delete config.providers
+  }
+
+  if (config.channels && typeof config.channels === 'object') {
+    const telegram = config.channels.telegram
+    if (telegram && typeof telegram === 'object' && telegram.config && typeof telegram.config === 'object') {
+      const next = { enabled: telegram.enabled !== false }
+      const allowFrom = []
+      const botToken = String(telegram.botToken || telegram.config.botToken || '').trim()
+      const chatId = String(telegram.chatId || telegram.config.chatId || '').trim()
+      if (botToken) next.botToken = botToken
+      if (Array.isArray(telegram.allowFrom)) allowFrom.push(...telegram.allowFrom.map(v => String(v || '').trim()).filter(Boolean))
+      if (chatId) allowFrom.push(chatId)
+      if (allowFrom.length) next.allowFrom = [...new Set(allowFrom)]
+      config.channels.telegram = next
+    }
+
+    const legacyWechat = config.channels.wechat
+    const wechatKey = WECHAT_NATIVE_CONFIG_KEY
+    if (legacyWechat && typeof legacyWechat === 'object' && !config.channels[wechatKey]) {
+      const src = legacyWechat.config && typeof legacyWechat.config === 'object' ? legacyWechat.config : legacyWechat
+      const next = { enabled: legacyWechat.enabled !== false }
+      const baseUrl = String(src.baseUrl || src.endpoint || '').trim()
+      const cdnBaseUrl = String(src.cdnBaseUrl || '').trim()
+      const routeTag = String(src.routeTag ?? '').trim()
+      if (baseUrl) next.baseUrl = baseUrl
+      if (cdnBaseUrl) next.cdnBaseUrl = cdnBaseUrl
+      if (routeTag) next.routeTag = Number(routeTag)
+      if (Object.keys(next).length > 1 || next.enabled) config.channels[wechatKey] = next
+    }
+    delete config.channels.wechat
+
+    const wecom = config.channels.wecom
+    if (wecom && typeof wecom === 'object' && wecom.config && typeof wecom.config === 'object') {
+      const next = { enabled: wecom.enabled !== false }
+      const botId = String(wecom.botId || wecom.config.botId || wecom.config.agentId || '').trim()
+      const secret = String(wecom.secret || wecom.config.secret || '').trim()
+      if (botId) next.botId = botId
+      if (secret) next.secret = secret
+      if (Object.keys(next).length === 1 && next.enabled === false) delete config.channels.wecom
+      else config.channels.wecom = next
+    }
+  }
+
+  return config
+}
+
 function stripUiFields(config) {
   // 清理根层级 ClawPanel 内部字段（version info 等），避免污染 openclaw.json
   // Issue #89: 这些字段被写入 openclaw.json 后导致 Gateway 无法启动（Unknown config keys）
@@ -1012,7 +1198,7 @@ function stripUiFields(config) {
       }
     }
   }
-  return config
+  return normalizeLegacyOpenclawConfig(config)
 }
 
 function syncProvidersToAgentModels(config) {
@@ -1932,7 +2118,7 @@ const handlers = {
   read_openclaw_config() {
     if (!fs.existsSync(CONFIG_PATH)) throw new Error('openclaw.json 不存在，请先安装 OpenClaw')
     const content = fs.readFileSync(CONFIG_PATH, 'utf8')
-    return JSON.parse(content)
+    return normalizeLegacyOpenclawConfig(JSON.parse(content))
   },
 
   write_openclaw_config({ config }) {
@@ -4326,35 +4512,21 @@ const handlers = {
   skills_list() {
     // 尝试真实 CLI
     try {
-      const out = execSync('npx -y openclaw skills list --json', { encoding: 'utf8', timeout: 30000 })
-      return extractCliJson(out)
+      return runCliJsonCommand('npx -y openclaw skills list --json', { timeout: 30000, env: getCliEnv() })
     } catch {
-      // CLI 不可用时返回 mock 数据
-      return {
-        skills: [
-          { name: 'github', description: 'GitHub operations via gh CLI: issues, PRs, CI runs, code review.', source: 'openclaw-bundled', bundled: true, emoji: '🐙', eligible: true, disabled: false, blockedByAllowlist: false, requirements: { bins: ['gh'], anyBins: [], env: [], config: [], os: [] }, missing: { bins: [], anyBins: [], env: [], config: [], os: [] }, install: [{ id: 'brew', kind: 'brew', label: 'Install GitHub CLI (brew)', bins: ['gh'] }] },
-          { name: 'weather', description: 'Get current weather and forecasts via wttr.in. No API key needed.', source: 'openclaw-bundled', bundled: true, emoji: '🌤️', eligible: true, disabled: false, blockedByAllowlist: false, requirements: { bins: ['curl'], anyBins: [], env: [], config: [], os: [] }, missing: { bins: [], anyBins: [], env: [], config: [], os: [] }, install: [] },
-          { name: 'summarize', description: 'Summarize web pages, PDFs, images, audio and more.', source: 'openclaw-bundled', bundled: true, emoji: '📝', eligible: false, disabled: false, blockedByAllowlist: false, requirements: { bins: [], anyBins: [], env: [], config: [], os: [] }, missing: { bins: [], anyBins: [], env: [], config: [], os: [] }, install: [] },
-          { name: 'slack', description: 'Send and read Slack messages via CLI.', source: 'openclaw-bundled', bundled: true, emoji: '💬', eligible: false, disabled: false, blockedByAllowlist: false, requirements: { bins: ['slack-cli'], anyBins: [], env: [], config: [], os: [] }, missing: { bins: ['slack-cli'], anyBins: [], env: [], config: [], os: [] }, install: [{ id: 'brew', kind: 'brew', label: 'Install Slack CLI (brew)', bins: ['slack-cli'] }] },
-          { name: 'notion', description: 'Create and search Notion pages using the API.', source: 'openclaw-bundled', bundled: true, emoji: '📓', eligible: false, disabled: true, blockedByAllowlist: false, requirements: { bins: [], anyBins: [], env: ['NOTION_API_KEY'], config: [], os: [] }, missing: { bins: [], anyBins: [], env: ['NOTION_API_KEY'], config: [], os: [] }, install: [] },
-        ],
-        source: 'mock',
-        cliAvailable: false,
-      }
+      return scanLocalSkills()
     }
   },
   skills_info({ name }) {
     try {
-      const out = execSync(`npx -y openclaw skills info ${JSON.stringify(name)} --json`, { encoding: 'utf8', timeout: 30000 })
-      return extractCliJson(out)
+      return runCliJsonCommand(`npx -y openclaw skills info ${JSON.stringify(name)} --json`, { timeout: 30000, env: getCliEnv() })
     } catch (e) {
       throw new Error('查看详情失败: ' + (e.message || e))
     }
   },
   skills_check() {
     try {
-      const out = execSync('npx -y openclaw skills check --json', { encoding: 'utf8', timeout: 30000 })
-      return extractCliJson(out)
+      return runCliJsonCommand('npx -y openclaw skills check --json', { timeout: 30000, env: getCliEnv() })
     } catch {
       return { summary: { total: 0, eligible: 0, disabled: 0, blocked: 0, missingRequirements: 0 }, eligible: [], disabled: [], blocked: [], missingRequirements: [] }
     }
@@ -4369,7 +4541,7 @@ const handlers = {
     const cmd = cmds[kind]
     if (!cmd) throw new Error(`不支持的安装类型: ${kind}`)
     try {
-      const out = execSync(cmd, { encoding: 'utf8', timeout: 120000 })
+      const out = execSync(cmd, { encoding: 'utf8', timeout: 120000, env: getCliEnv() })
       return { success: true, output: out.trim() }
     } catch (e) {
       throw new Error(`安装失败: ${e.message || e}`)
@@ -4377,7 +4549,7 @@ const handlers = {
   },
   skills_skillhub_check() {
     try {
-      const out = execSync('skillhub --cli-version', { encoding: 'utf8', timeout: 5000 })
+      const out = execSync('skillhub -v', { encoding: 'utf8', timeout: 5000, env: getCliEnv() })
       return { installed: true, version: out.trim() }
     } catch {
       return { installed: false }
@@ -4388,7 +4560,7 @@ const handlers = {
     try {
       const out = execSync(
         `curl -fsSL https://skillhub-1388575217.cos.ap-guangzhou.myqcloud.com/install/install.sh | bash -s -- ${flag}`,
-        { encoding: 'utf8', timeout: 120000 }
+        { encoding: 'utf8', timeout: 120000, env: getCliEnv() }
       )
       return { success: true, output: out.trim() }
     } catch (e) {
@@ -4399,30 +4571,62 @@ const handlers = {
     const q = String(query || '').trim()
     if (!q) return []
     try {
-      const out = execSync(`skillhub search ${JSON.stringify(q)}`, { encoding: 'utf8', timeout: 30000 })
-      // 解析格式: [N]   owner/repo/name   状态\n     统计  描述...
+      const out = execSync(`skillhub search ${JSON.stringify(q)}`, { encoding: 'utf8', timeout: 30000, env: getCliEnv() })
       const lines = out.split('\n')
       const items = []
-      for (let i = 0; i < lines.length; i++) {
-        const trimmed = lines[i].trim()
-        if (!trimmed.startsWith('[')) continue
-        const bracketEnd = trimmed.indexOf(']')
-        if (bracketEnd < 0) continue
-        const afterBracket = trimmed.slice(bracketEnd + 1).trim()
-        const slug = (afterBracket.split(/\s/)[0] || '').trim()
-        if (!slug.includes('/')) continue
-        let desc = ''
-        if (i + 1 < lines.length) {
-          const next = lines[i + 1].trim()
-          const starIdx = next.indexOf('⭐')
-          if (starIdx >= 0) {
-            const afterStar = next.slice(starIdx + 2).trim()
-            desc = afterStar.replace(/^[\d.]+[kKmM]?\s*/, '').trim()
-          }
-        }
-        items.push({ slug, description: desc, source: 'skillhub' })
+      let current = null
+
+      const pushCurrent = () => {
+        if (!current?.slug) return
+        current.description = String(current.description || '').trim()
+        items.push(current)
       }
-      return items
+
+      for (const line of lines) {
+        const raw = String(line || '')
+        const trimmed = raw.trim()
+        if (!trimmed) continue
+        if (/^You can use\s+"skillhub install/i.test(trimmed)) continue
+
+        // 兼容旧格式: [1] owner/repo/name ...
+        if (trimmed.startsWith('[')) {
+          if (current) pushCurrent()
+          const bracketEnd = trimmed.indexOf(']')
+          if (bracketEnd < 0) continue
+          const afterBracket = trimmed.slice(bracketEnd + 1).trim()
+          const slug = (afterBracket.split(/\s+/)[0] || '').trim()
+          if (!slug.includes('/')) { current = null; continue }
+          current = { slug, description: '', source: 'skillhub' }
+          continue
+        }
+
+        // 新格式: slug  Name
+        if (!raw.startsWith(' ') && !raw.startsWith('\t')) {
+          if (current) pushCurrent()
+          const slug = (trimmed.split(/\s+/)[0] || '').trim()
+          current = slug ? { slug, description: '', source: 'skillhub' } : null
+          continue
+        }
+
+        if (!current) continue
+        if (/^-\s*version\s*:/i.test(trimmed)) continue
+
+        // 优先取第一条描述性内容；如果后面是中文补充，则拼接进去
+        if (/^-\s*/.test(trimmed)) {
+          const desc = trimmed.replace(/^-\s*/, '').trim()
+          if (desc && !current.description) current.description = desc
+          continue
+        }
+
+        if (trimmed && current.description && !current.description.includes(trimmed)) {
+          current.description += ` ${trimmed}`
+        } else if (trimmed && !current.description) {
+          current.description = trimmed
+        }
+      }
+
+      if (current) pushCurrent()
+      return items.filter(item => item.slug)
     } catch (e) {
       throw new Error('搜索失败: ' + (e.message || e) + '。请先安装 SkillHub CLI')
     }
@@ -4431,7 +4635,7 @@ const handlers = {
     const skillsDir = path.join(OPENCLAW_DIR, 'skills')
     if (!fs.existsSync(skillsDir)) fs.mkdirSync(skillsDir, { recursive: true })
     try {
-      const out = execSync(`skillhub install ${JSON.stringify(slug)} --force`, { cwd: homedir(), encoding: 'utf8', timeout: 120000 })
+      const out = execSync(`skillhub install ${JSON.stringify(slug)} --force`, { cwd: homedir(), encoding: 'utf8', timeout: 120000, env: getCliEnv() })
       // 验证安装结果
       const name = String(slug).split('/').pop().split('@')[0]
       const installed = name && fs.existsSync(path.join(skillsDir, name))
@@ -4453,7 +4657,7 @@ const handlers = {
     const q = String(query || '').trim()
     if (!q) return []
     try {
-      const out = execSync(`npx -y clawhub search ${JSON.stringify(q)}`, { encoding: 'utf8', timeout: 30000 })
+      const out = execSync(`npx -y clawhub search ${JSON.stringify(q)}`, { encoding: 'utf8', timeout: 30000, env: getCliEnv() })
       return out.split('\n')
         .map(line => line.trim())
         .filter(line => line && !line.startsWith('-') && !line.startsWith('Search'))
@@ -4470,7 +4674,7 @@ const handlers = {
     const skillsDir = path.join(OPENCLAW_DIR, 'skills')
     if (!fs.existsSync(skillsDir)) fs.mkdirSync(skillsDir, { recursive: true })
     try {
-      const out = execSync(`npx -y clawhub install ${JSON.stringify(slug)}`, { cwd: homedir(), encoding: 'utf8', timeout: 120000 })
+      const out = execSync(`npx -y clawhub install ${JSON.stringify(slug)}`, { cwd: homedir(), encoding: 'utf8', timeout: 120000, env: getCliEnv() })
       // 验证安装结果
       const name = String(slug).split('/').pop().split('@')[0]
       const installed = name && fs.existsSync(path.join(skillsDir, name))
@@ -4560,11 +4764,11 @@ const handlers = {
       method: 'connect',
       params: {
         minProtocol: 3, maxProtocol: 3,
-        client: { id: 'openclaw-control-ui', version: '1.0.0', platform, deviceFamily: 'desktop', mode: 'ui' },
+        client: { id: 'openclaw-control-ui', version: PANEL_VERSION, platform, deviceFamily: 'desktop', mode: 'ui' },
         role: 'operator', scopes: SCOPES, caps: [],
         auth: { token: gatewayToken || '' },
         device: { id: deviceId, publicKey, signedAt, nonce: nonce || '', signature: sigB64 },
-        locale: 'zh-CN', userAgent: 'ClawPanel/1.0.0 (web)',
+        locale: 'zh-CN', userAgent: `Cpanel/${PANEL_VERSION} (web)`,
       },
     }
   },

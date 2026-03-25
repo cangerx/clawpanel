@@ -14,9 +14,9 @@ export async function render() {
 
   page.innerHTML = `
     <div class="page-header" style="display:flex;align-items:center;gap:16px">
-      <img src="/images/logo-brand.png" alt="ClawPanel" style="height:48px;width:auto">
+      <img src="/images/logo-brand.png" alt="Cpanel" style="height:48px;width:auto">
       <div>
-        <h1 class="page-title" style="margin:0">ClawPanel</h1>
+        <h1 class="page-title" style="margin:0">Cpanel</h1>
         <p class="page-desc" style="margin:0">OpenClaw 可视化管理面板 · <a href="https://api.772.ee/" target="_blank" rel="noopener" style="color:var(--primary)">api.772.ee</a></p>
       </div>
     </div>
@@ -35,7 +35,7 @@ export async function render() {
       </div>
     </div>
     <div class="config-section" style="color:var(--text-tertiary);font-size:var(--font-size-xs)">
-      <p>基于 ClawPanel (Tauri v2) 二次开发，前端 Vanilla JS + Vite，后端 Rust。</p>
+      <p>基于 Cpanel (Tauri v2) 二次开发，前端 Vanilla JS + Vite，后端 Rust。</p>
       <p style="margin-top:8px">MIT License</p>
     </div>
   `
@@ -77,7 +77,7 @@ async function loadData(page) {
 
     cards.innerHTML = `
       <div class="stat-card">
-        <div class="stat-card-header"><span class="stat-card-label">ClawPanel</span></div>
+        <div class="stat-card-header"><span class="stat-card-label">Cpanel</span></div>
         <div class="stat-card-value">${panelVersion}</div>
         <div class="stat-card-meta" id="panel-update-meta" style="display:flex;align-items:center;gap:8px">${panelUpdateHtml}</div>
       </div>

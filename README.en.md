@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="public/images/logo-brand.png" width="360" alt="ClawPanel">
+  <img src="public/images/logo-brand.png" width="360" alt="Cpanel">
 </p>
 
 <p align="center">
@@ -12,10 +12,10 @@
 
 <p align="center">
   <a href="https://github.com/cangerx/clawpanel/releases/latest">
-    <img src="https://img.shields.io/github/v/release/cangerx/clawpanel?style=flat-square&color=6366f1" alt="Release">
+    <img src="https://img.shields.io/github/v/release/cangerx/clawpanel?style=flat-square&color=16a34a" alt="Release">
   </a>
   <a href="https://github.com/cangerx/clawpanel/releases/latest">
-    <img src="https://img.shields.io/github/downloads/cangerx/clawpanel/total?style=flat-square&color=8b5cf6" alt="Downloads">
+    <img src="https://img.shields.io/github/downloads/cangerx/clawpanel/total?style=flat-square&color=22c55e" alt="Downloads">
   </a>
   <a href="https://github.com/cangerx/clawpanel/blob/main/LICENSE">
     <img src="https://img.shields.io/badge/license-AGPL--3.0-blue.svg?style=flat-square" alt="License">
@@ -28,10 +28,10 @@
 ---
 
 <p align="center">
-  <img src="docs/feature-showcase.gif" width="800" alt="ClawPanel Feature Showcase">
+  <img src="docs/feature-showcase.gif" width="800" alt="Cpanel Feature Showcase">
 </p>
 
-ClawPanel is a visual management panel for the [OpenClaw](https://openclaw.ai) AI Agent framework. It features a **built-in intelligent AI assistant** that helps you install OpenClaw with one click, auto-diagnose configurations, troubleshoot issues, and fix errors. 8 tools + 4 modes + interactive Q&A — easy to manage for beginners and experts alike.
+Cpanel is a visual management panel for the [OpenClaw](https://openclaw.ai) AI Agent framework. It features a **built-in intelligent AI assistant** that helps you install OpenClaw with one click, auto-diagnose configurations, troubleshoot issues, and fix errors. 8 tools + 4 modes + interactive Q&A — easy to manage for beginners and experts alike.
 
 > 📦 **Download**:
 > - Overseas users: [GitHub Releases](https://github.com/cangerx/clawpanel/releases/latest)
@@ -51,22 +51,22 @@ Download the latest installer from [GitHub Releases](https://github.com/cangerx/
 
 | Format | Package | Notes |
 |--------|---------|-------|
-| EXE installer | `ClawPanel_x.x.x_x64-setup.exe` | Recommended for most users |
-| MSI installer | `ClawPanel_x.x.x_x64_en-US.msi` | Enterprise deployment / silent install |
+| EXE installer | `Cpanel_x.x.x_x64-setup.exe` | Recommended for most users |
+| MSI installer | `Cpanel_x.x.x_x64_en-US.msi` | Enterprise deployment / silent install |
 
 #### macOS
 
 | Chip | Package | Notes |
 |------|---------|-------|
-| Apple Silicon (M1/M2/M3/M4) | `ClawPanel_x.x.x_aarch64.dmg` | Macs released in late 2020 and later |
-| Intel | `ClawPanel_x.x.x_x64.dmg` | Older Intel-based Macs |
+| Apple Silicon (M1/M2/M3/M4) | `Cpanel_x.x.x_aarch64.dmg` | Macs released in late 2020 and later |
+| Intel | `Cpanel_x.x.x_x64.dmg` | Older Intel-based Macs |
 
-Open the `.dmg`, drag ClawPanel into **Applications**, then launch it.
+Open the `.dmg`, drag Cpanel into **Applications**, then launch it.
 
 > **⚠️ First launch says “damaged” or “developer cannot be verified”?** The app is currently unsigned, so macOS may block it. Run:
 >
 > ```bash
-> sudo xattr -rd com.apple.quarantine /Applications/ClawPanel.app
+> sudo xattr -rd com.apple.quarantine /Applications/Cpanel.app
 > ```
 >
 > Or go to **System Settings → Privacy & Security** and click **Open Anyway**.
@@ -75,13 +75,13 @@ Open the `.dmg`, drag ClawPanel into **Applications**, then launch it.
 
 | Format | Package | Notes |
 |--------|---------|-------|
-| AppImage | `ClawPanel_x.x.x_amd64.AppImage` | Portable, run after `chmod +x` |
-| DEB | `ClawPanel_x.x.x_amd64.deb` | Debian / Ubuntu |
-| RPM | `ClawPanel-x.x.x-1.x86_64.rpm` | Fedora / RHEL |
+| AppImage | `Cpanel_x.x.x_amd64.AppImage` | Portable, run after `chmod +x` |
+| DEB | `Cpanel_x.x.x_amd64.deb` | Debian / Ubuntu |
+| RPM | `Cpanel-x.x.x-1.x86_64.rpm` | Fedora / RHEL |
 
 ### Linux Server / Web
 
-For headless Linux servers, install or update ClawPanel Web with the canonical entry point:
+For headless Linux servers, install or update Cpanel Web with the canonical entry point:
 
 - **Overseas users (GitHub)**
 
@@ -177,7 +177,7 @@ If you already use Docker or Compose, keep README as the overview and use the de
 
 ## Quick Start
 
-1. Install and open ClawPanel
+1. Install and open Cpanel
 2. On first run, it auto-detects your Node.js environment and OpenClaw CLI
 3. If OpenClaw is not installed, click one-click install
 4. After installation, the dashboard loads automatically
@@ -232,7 +232,7 @@ Issues and Pull Requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for
 
 ## Acknowledgements
 
-ClawPanel keeps growing because of every contributor in the community. Thank you for helping make the project better.
+Cpanel keeps growing because of every contributor in the community. Thank you for helping make the project better.
 
 ### Code Contributors
 

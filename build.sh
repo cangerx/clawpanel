@@ -186,5 +186,5 @@ fi
 
 echo ""
 echo -e "  ${GRAY}提示: 发布跨平台版本请推送 tag，例如:${RESET}"
-echo -e "  ${GRAY}  git tag v1.0.0 && git push origin v1.0.0${RESET}"
+echo -e "  ${GRAY}  git tag v1.0.1 && git push origin v1.0.1${RESET}"
 echo ""

@@ -474,7 +474,7 @@ mark {
 }
 .login-card .login-logo {
   width: 48px; height: 48px; margin: 0 auto 16px;
-  color: var(--primary, #6366f1);
+  color: var(--accent);
 }
 .login-card .login-title {
   font-size: 20px; font-weight: 600; margin-bottom: 4px;
@@ -490,23 +490,23 @@ mark {
   border-radius: 8px; outline: none;
   background: var(--bg-secondary, #f4f4f5);
   color: var(--text-primary, #18181b);
-  transition: border-color 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s;
 }
 .login-card .login-input:focus {
-  border-color: var(--primary, #6366f1);
-  box-shadow: 0 0 0 3px rgba(99,102,241,0.15);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-muted);
 }
 .login-card .login-btn {
   width: 100%; margin-top: 16px; padding: 10px 0;
   font-size: 14px; font-weight: 500;
   border: none; border-radius: 8px; cursor: pointer;
-  background: var(--primary, #6366f1);
+  background: var(--accent);
   color: #fff; transition: all 0.2s;
-  box-shadow: 0 2px 8px rgba(99,102,241,0.25);
+  box-shadow: 0 2px 8px rgba(22, 163, 74, 0.25);
 }
 .login-card .login-btn:hover {
-  background: #4f46e5;
-  box-shadow: 0 4px 16px rgba(99,102,241,0.35);
+  background: var(--accent-hover);
+  box-shadow: 0 4px 16px rgba(22, 163, 74, 0.35);
   transform: translateY(-1px);
 }
 .login-card .login-btn:active {

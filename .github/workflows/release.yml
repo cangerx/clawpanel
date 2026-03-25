@@ -1,4 +1,4 @@
-# ClawPanel 发布构建工作流
+# Cpanel 发布构建工作流
 # 推送 v* 标签时自动构建跨平台产物并创建 GitHub Release
 name: Release
 
@@ -9,10 +9,10 @@ on:
   workflow_dispatch:
     inputs:
       tag_name:
-        description: '发布版本号 (例如: v1.0.0)'
+        description: '发布版本号 (例如: v1.0.1)'
         required: true
         type: string
-        default: 'v1.0.0'
+        default: 'v1.0.1'
 
 jobs:
   # ── 跨平台构建 job ─────────────────────────────────────────────────────────
@@ -106,7 +106,7 @@ jobs:
           # TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ env.TAG_NAME }}
-          releaseName: "ClawPanel ${{ env.TAG_NAME }}"
+          releaseName: "Cpanel ${{ env.TAG_NAME }}"
           releaseBody: "正在构建所有平台安装包，请稍候..."
           releaseDraft: false
           prerelease: false
@@ -165,7 +165,7 @@ jobs:
 
           # 确保 Release 已存在（部分平台构建失败时 tauri-action 可能未创建）
           gh release view "$TAG_NAME" >/dev/null 2>&1 || \
-            gh release create "$TAG_NAME" --title "ClawPanel ${TAG_NAME}" --notes "正在构建所有平台安装包，请稍候..."
+            gh release create "$TAG_NAME" --title "Cpanel ${TAG_NAME}" --notes "正在构建所有平台安装包，请稍候..."
 
           # 上传为 Release Asset
           gh release upload "$TAG_NAME" "web-${VERSION}.zip" --clobber
@@ -265,29 +265,29 @@ jobs:
             echo "### macOS"
             echo "| 芯片 | 安装包 |"
             echo "|------|--------|"
-            echo "| Apple Silicon (M1/M2/M3/M4) | [ClawPanel_${VERSION}_aarch64.dmg](${DL}/ClawPanel_${VERSION}_aarch64.dmg) |"
-            echo "| Intel | [ClawPanel_${VERSION}_x64.dmg](${DL}/ClawPanel_${VERSION}_x64.dmg) |"
+            echo "| Apple Silicon (M1/M2/M3/M4) | [Cpanel_${VERSION}_aarch64.dmg](${DL}/Cpanel_${VERSION}_aarch64.dmg) |"
+            echo "| Intel | [Cpanel_${VERSION}_x64.dmg](${DL}/Cpanel_${VERSION}_x64.dmg) |"
             echo ""
-            echo '> **⚠️ 首次打开提示"无法验证开发者"？** 在终端执行：`sudo xattr -rd com.apple.quarantine /Applications/ClawPanel.app`，或前往 **系统设置 → 隐私与安全性** 点击「仍要打开」。'
+            echo '> **⚠️ 首次打开提示"无法验证开发者"？** 在终端执行：`sudo xattr -rd com.apple.quarantine /Applications/Cpanel.app`，或前往 **系统设置 → 隐私与安全性** 点击「仍要打开」。'
             echo ""
             echo "### Windows"
             echo "| 格式 | 安装包 |"
             echo "|------|--------|"
-            echo "| EXE 安装器（推荐） | [ClawPanel_${VERSION}_x64-setup.exe](${DL}/ClawPanel_${VERSION}_x64-setup.exe) |"
-            echo "| MSI 安装器 | [ClawPanel_${VERSION}_x64_en-US.msi](${DL}/ClawPanel_${VERSION}_x64_en-US.msi) |"
+            echo "| EXE 安装器（推荐） | [Cpanel_${VERSION}_x64-setup.exe](${DL}/Cpanel_${VERSION}_x64-setup.exe) |"
+            echo "| MSI 安装器 | [Cpanel_${VERSION}_x64_en-US.msi](${DL}/Cpanel_${VERSION}_x64_en-US.msi) |"
             echo ""
             echo "### Linux"
             echo "| 格式 | 安装包 |"
             echo "|------|--------|"
-            echo "| AppImage（免安装） | [ClawPanel_${VERSION}_amd64.AppImage](${DL}/ClawPanel_${VERSION}_amd64.AppImage) |"
-            echo "| DEB（Debian/Ubuntu） | [ClawPanel_${VERSION}_amd64.deb](${DL}/ClawPanel_${VERSION}_amd64.deb) |"
-            echo "| RPM（Fedora/RHEL） | [ClawPanel-${VERSION}-1.x86_64.rpm](${DL}/ClawPanel-${VERSION}-1.x86_64.rpm) |"
+            echo "| AppImage（免安装） | [Cpanel_${VERSION}_amd64.AppImage](${DL}/Cpanel_${VERSION}_amd64.AppImage) |"
+            echo "| DEB（Debian/Ubuntu） | [Cpanel_${VERSION}_amd64.deb](${DL}/Cpanel_${VERSION}_amd64.deb) |"
+            echo "| RPM（Fedora/RHEL） | [Cpanel-${VERSION}-1.x86_64.rpm](${DL}/Cpanel-${VERSION}-1.x86_64.rpm) |"
             echo ""
             echo "---"
             echo ""
             echo "## 🚀 首次使用"
             echo ""
-            echo "1. 安装并打开 ClawPanel"
+            echo "1. 安装并打开 Cpanel"
             echo "2. 首次运行会自动检测 Node.js 环境和 OpenClaw CLI"
             echo "3. 如未安装 OpenClaw，按提示一键安装即可"
             echo "4. 安装完成后自动跳转仪表盘，开始使用"

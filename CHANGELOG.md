@@ -5,6 +5,20 @@
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.0.1] - 2026-03-25
+
+### 修复 (Fixes)
+
+- **Skills CLI stderr 兼容** — `openclaw skills list/check/info --json` 即使将 JSON 输出到 `stderr` 也能被正确解析，Skills 页不再误报“CLI 不可用，仅显示本地扫描结果”
+- **Skills 清单恢复显示** — 修复 fallback 误判后，bundled Skills 恢复正常展示，不再只剩本地扫描到的单个 skill
+- **登录页主题残留色** — 登录页输入框 focus 与登录按钮阴影统一切换到绿色主题，不再残留蓝紫色强调样式
+
+### 改进 (Improvements)
+
+- **品牌展示改名** — 用户可见品牌从 `ClawPanel` 统一更新为 `Cpanel`，覆盖窗口标题、托盘文案、启动页、登录页、侧边栏、设置页、关于页与发布展示名
+- **全局主题换绿** — 全局 accent 变量、焦点边框、渐变与 glow 阴影统一调整为绿色系，亮色/暗色主题保持一致
+- **开发记录补充验证** — 增补 Skills 页面回归验证结论，明确“其他 Skills 未被删除，只是此前被 local scan fallback 遮蔽”
+
 ## [1.0.0] - 2026-03-23
 
 ### 新功能 (Features)

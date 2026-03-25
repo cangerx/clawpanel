@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="public/images/logo-brand.png" width="360" alt="ClawPanel">
+  <img src="public/images/logo-brand.png" width="360" alt="Cpanel">
 </p>
 
 <p align="center">
@@ -12,10 +12,10 @@
 
 <p align="center">
   <a href="https://github.com/cangerx/clawpanel/releases/latest">
-    <img src="https://img.shields.io/github/v/release/cangerx/clawpanel?style=flat-square&color=6366f1" alt="Release">
+    <img src="https://img.shields.io/github/v/release/cangerx/clawpanel?style=flat-square&color=16a34a" alt="Release">
   </a>
   <a href="https://github.com/cangerx/clawpanel/releases/latest">
-    <img src="https://img.shields.io/github/downloads/cangerx/clawpanel/total?style=flat-square&color=8b5cf6" alt="Downloads">
+    <img src="https://img.shields.io/github/downloads/cangerx/clawpanel/total?style=flat-square&color=22c55e" alt="Downloads">
   </a>
   <a href="https://github.com/cangerx/clawpanel/blob/main/LICENSE">
     <img src="https://img.shields.io/badge/license-AGPL--3.0-blue.svg?style=flat-square" alt="License">
@@ -28,10 +28,10 @@
 ---
 
 <p align="center">
-  <img src="docs/feature-showcase.gif" width="800" alt="ClawPanel 功能全景">
+  <img src="docs/feature-showcase.gif" width="800" alt="Cpanel 功能全景">
 </p>
 
-ClawPanel 是 [OpenClaw](https://github.com/1186258278/OpenClawChineseTranslation) AI Agent 框架的可视化管理面板。**内置智能 AI 助手**，帮你一键安装 OpenClaw、自动诊断配置、排查问题、修复错误。8 大工具 + 4 种模式 + 交互式问答，从新手到老手都能轻松管理。
+Cpanel 是 [OpenClaw](https://github.com/1186258278/OpenClawChineseTranslation) AI Agent 框架的可视化管理面板。**内置智能 AI 助手**，帮你一键安装 OpenClaw、自动诊断配置、排查问题、修复错误。8 大工具 + 4 种模式 + 交互式问答，从新手到老手都能轻松管理。
 
 > 📦 **下载**:
 > - 海外用户： [GitHub Releases](https://github.com/cangerx/clawpanel/releases/latest)
@@ -39,7 +39,7 @@ ClawPanel 是 [OpenClaw](https://github.com/1186258278/OpenClawChineseTranslatio
 
 ### 🔥 开发板 / 嵌入式设备支持
 
-ClawPanel 提供**纯 Web 部署模式**（零 GUI 依赖），适合 ARM64 开发板和嵌入式设备：
+Cpanel 提供**纯 Web 部署模式**（零 GUI 依赖），适合 ARM64 开发板和嵌入式设备：
 
 - **Orange Pi / 树莓派 / RK3588** 等 ARM64 板子 — 推荐走 Linux Web 一键部署入口 `deploy.sh`
 - **Armbian / Debian / Ubuntu Server** — 统一使用根目录 `deploy.sh`，脚本会自动检测架构并选择后台运行方式
@@ -60,44 +60,44 @@ ClawPanel 提供**纯 Web 部署模式**（零 GUI 依赖），适合 ARM64 开�
 
 | 格式 | 安装包 | 说明 |
 |------|--------|------|
-| EXE 安装器 | `ClawPanel_x.x.x_x64-setup.exe` | 推荐，双击安装 |
-| MSI 安装器 | `ClawPanel_x.x.x_x64_en-US.msi` | 企业部署 / 静默安装 |
+| EXE 安装器 | `Cpanel_x.x.x_x64-setup.exe` | 推荐，双击安装 |
+| MSI 安装器 | `Cpanel_x.x.x_x64_en-US.msi` | 企业部署 / 静默安装 |
 
 #### macOS
 
 | 芯片 | 安装包 | 说明 |
 |------|--------|------|
-| Apple Silicon (M1/M2/M3/M4) | `ClawPanel_x.x.x_aarch64.dmg` | 2020 年末及之后的 Mac |
-| Intel | `ClawPanel_x.x.x_x64.dmg` | 2020 年及之前的 Mac |
+| Apple Silicon (M1/M2/M3/M4) | `Cpanel_x.x.x_aarch64.dmg` | 2020 年末及之后的 Mac |
+| Intel | `Cpanel_x.x.x_x64.dmg` | 2020 年及之前的 Mac |
 
 > 不确定芯片类型？点击左上角 → 关于本机，查看「芯片」一栏。
 
-安装方式：打开 `.dmg` 文件，**先将 ClawPanel 拖入「应用程序」文件夹**，再双击打开。
+安装方式：打开 `.dmg` 文件，**先将 Cpanel 拖入「应用程序」文件夹**，再双击打开。
 
 > **⚠️ 首次打开提示"已损坏"或"无法验证开发者"？** 由于应用未签名，macOS 会拦截。请在终端执行以下命令解除限制：
 >
 > ```bash
-> sudo xattr -rd com.apple.quarantine /Applications/ClawPanel.app
+> sudo xattr -rd com.apple.quarantine /Applications/Cpanel.app
 > ```
 >
-> 或者前往「系统设置 → 隐私与安全性」，找到 ClawPanel 点击「仍要打开」。
+> 或者前往「系统设置 → 隐私与安全性」，找到 Cpanel 点击「仍要打开」。
 >
 > 提示 `No such file`？说明没有拖入应用程序文件夹。请先拖入，或改用：
 > ```bash
-> sudo xattr -rd com.apple.quarantine ~/Downloads/ClawPanel.app
+> sudo xattr -rd com.apple.quarantine ~/Downloads/Cpanel.app
 > ```
 
 #### Linux Desktop
 
 | 格式 | 安装包 | 说明 |
 |------|--------|------|
-| AppImage | `ClawPanel_x.x.x_amd64.AppImage` | 免安装，`chmod +x` 后直接运行 |
-| DEB | `ClawPanel_x.x.x_amd64.deb` | Debian / Ubuntu：`sudo dpkg -i *.deb` |
-| RPM | `ClawPanel-x.x.x-1.x86_64.rpm` | Fedora / RHEL：`sudo rpm -i *.rpm` |
+| AppImage | `Cpanel_x.x.x_amd64.AppImage` | 免安装，`chmod +x` 后直接运行 |
+| DEB | `Cpanel_x.x.x_amd64.deb` | Debian / Ubuntu：`sudo dpkg -i *.deb` |
+| RPM | `Cpanel-x.x.x-1.x86_64.rpm` | Fedora / RHEL：`sudo rpm -i *.rpm` |
 
 ### Linux 服务器 / Web
 
-没有桌面环境？推荐使用统一安装脚本部署或更新 ClawPanel Web 版：
+没有桌面环境？推荐使用统一安装脚本部署或更新 Cpanel Web 版：
 
 - **海外用户（GitHub）**
 
@@ -152,7 +152,7 @@ ARM64 设备同样走 **Web 模式**，不使用桌面安装包。推荐直接�
 ## 功能截图
 
 <p align="center">
-  <img src="docs/quick-stats.gif" width="800" alt="ClawPanel 数据概览">
+  <img src="docs/quick-stats.gif" width="800" alt="Cpanel 数据概览">
 </p>
 
 <p align="center">
@@ -232,7 +232,7 @@ ARM64 设备同样走 **Web 模式**，不使用桌面安装包。推荐直接�
 
 ## 🤖 AI 助手亮点
 
-ClawPanel 内置的 AI 助手不只是聊天机器人——它能**直接操作你的系统**，帮你诊断、修复、甚至提交 PR。
+Cpanel 内置的 AI 助手不只是聊天机器人——它能**直接操作你的系统**，帮你诊断、修复、甚至提交 PR。
 
 ### 四种操作模式
 
@@ -428,7 +428,7 @@ Web 版功能与桌面版一致，后端通过 `scripts/dev-api.js` 调用本机
 
 ### 1. 初始设置
 
-首次启动 ClawPanel 会自动进入**初始设置**页面，引导你完成环境检测：
+首次启动 Cpanel 会自动进入**初始设置**页面，引导你完成环境检测：
 
 - ✅ **Node.js** — 自动检测，未安装时提供一键安装
 - ✅ **Git** — 自动检测并配置 HTTPS 模式（解决 SSH 不通问题）
@@ -483,7 +483,7 @@ curl -fsSL https://gitee.com/cangerx/clawpanel/raw/main/deploy.sh | bash
 
 ## 消息渠道配置
 
-ClawPanel 支持将 AI 接入多种即时通讯平台，在「消息渠道」页面统一管理。
+Cpanel 支持将 AI 接入多种即时通讯平台，在「消息渠道」页面统一管理。
 
 ### 支持的平台
 
@@ -513,7 +513,7 @@ ClawPanel 支持将 AI 接入多种即时通讯平台，在「消息渠道」页
 
 1. 在飞书开放平台创建**企业自建应用**，开启**机器人**能力
 2. 获取 `App ID` 和 `App Secret`
-3. 在 ClawPanel「消息渠道」页面选择飞书，填入凭证
+3. 在 Cpanel「消息渠道」页面选择飞书，填入凭证
 4. 点击「校验」确认连接，然后「保存」
 5. Gateway 会自动重载，飞书机器人即刻可用
 
@@ -534,28 +534,28 @@ ClawPanel 支持将 AI 接入多种即时通讯平台，在「消息渠道」页
 没有苹果开发者签名，macOS Gatekeeper 会拦截。终端执行：
 
 ```bash
-sudo xattr -rd com.apple.quarantine /Applications/ClawPanel.app
+sudo xattr -rd com.apple.quarantine /Applications/Cpanel.app
 ```
 
 或前往「系统设置 → 隐私与安全性」点击「仍要打开」。
 
 ### macOS 检测不到 Node.js
 
-从 Finder/Dock 启动 ClawPanel 时，应用的 PATH 环境变量可能不包含 Node.js 安装路径。
+从 Finder/Dock 启动 Cpanel 时，应用的 PATH 环境变量可能不包含 Node.js 安装路径。
 
 **v0.4.1 已修复**：自动补充 `/usr/local/bin`、`/opt/homebrew/bin`、`~/.nvm`、`~/.volta` 等常见路径。
 
-临时解决：从终端启动 ClawPanel：
+临时解决：从终端启动 Cpanel：
 
 ```bash
-open /Applications/ClawPanel.app
+open /Applications/Cpanel.app
 ```
 
 ### Windows 安装 OpenClaw 报 ENOENT (-4058)
 
 通常是文件权限或 npm 缓存问题：
 
-1. 以管理员身份运行 ClawPanel
+1. 以管理员身份运行 Cpanel
 2. 或打开 PowerShell（管理员）手动安装：
    ```powershell
    npm install -g @qingchencloud/openclaw-zh --registry https://registry.npmmirror.com
@@ -575,7 +575,7 @@ git config --global url."https://github.com/".insteadOf git@github.com:
 
 ### Windows 安装报 EPERM (operation not permitted)
 
-文件被其他进程锁定。先关闭 ClawPanel 和所有 Node.js 进程，以管理员身份打开 PowerShell 重装：
+文件被其他进程锁定。先关闭 Cpanel 和所有 Node.js 进程，以管理员身份打开 PowerShell 重装：
 
 ```powershell
 npm cache clean --force
@@ -584,7 +584,7 @@ npm install -g @qingchencloud/openclaw-zh --registry https://registry.npmmirror.
 
 ### 安装后 Node.js 检测不到（Windows）
 
-安装 Node.js 后需要**重启 ClawPanel**，新的 PATH 环境变量才能生效。
+安装 Node.js 后需要**重启 Cpanel**，新的 PATH 环境变量才能生效。
 
 如果安装在非默认路径（如 `D:\nodejs`、`F:\AI\Node`），请确认该目录已加入系统 PATH 环境变量。**v0.4.2+ 已自动扫描常见安装路径。**
 
@@ -604,9 +604,9 @@ npm install -g @qingchencloud/openclaw-zh --registry https://registry.npmmirror.
 ### 模型连接超时 / 测试失败
 
 1. **检查 API Key** — 确认 Key 未过期、余额充足
-2. **检查 Base URL** — 不同服务商 URL 格式不同，注意结尾不要多 `/v1`（ClawPanel 会自动处理）
+2. **检查 Base URL** — 不同服务商 URL 格式不同，注意结尾不要多 `/v1`（Cpanel 会自动处理）
 3. **网络问题** — 国内访问 OpenAI 需要代理；DeepSeek / 阿里通义 / Ollama 国内直连
-4. **Ollama 特殊处理** — URL 填 `http://127.0.0.1:11434`（不加 `/v1`，ClawPanel 自动补全）
+4. **Ollama 特殊处理** — URL 填 `http://127.0.0.1:11434`（不加 `/v1`，Cpanel 自动补全）
 
 ### WebSocket 断连 / 聊天无响应
 
@@ -648,7 +648,7 @@ sudo systemctl restart clawpanel  # 或 pm2 restart clawpanel
 
 ## 致谢
 
-ClawPanel 的成长离不开每一位贡献者的付出。感谢你们让这个项目变得更好！
+Cpanel 的成长离不开每一位贡献者的付出。感谢你们让这个项目变得更好！
 
 ### 🛠 代码贡献者
 
@@ -669,7 +669,7 @@ ClawPanel 的成长离不开每一位贡献者的付出。感谢你们让这个�
 
 ### 🐛 社区反馈者
 
-感谢以下用户提交 Issue 报告 Bug 或建议功能，帮助 ClawPanel 持续改进：
+感谢以下用户提交 Issue 报告 Bug 或建议功能，帮助 Cpanel 持续改进：
 
 <a href="https://github.com/asfork"><img src="https://github.com/asfork.png?size=40" width="32" height="32" title="asfork"></a>
 <a href="https://github.com/p1ayer222"><img src="https://github.com/p1ayer222.png?size=40" width="32" height="32" title="p1ayer222"></a>

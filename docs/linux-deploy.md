@@ -85,7 +85,7 @@ CLAWPANEL_HOST=127.0.0.1 curl -fsSL https://raw.githubusercontent.com/cangerx/cl
 CLAWPANEL_DIR=/srv/clawpanel curl -fsSL https://raw.githubusercontent.com/cangerx/clawpanel/main/deploy.sh | bash
 
 # 安装指定 tag
-CLAWPANEL_REF=v1.0.0 curl -fsSL https://raw.githubusercontent.com/cangerx/clawpanel/main/deploy.sh | bash
+CLAWPANEL_REF=v1.0.1 curl -fsSL https://raw.githubusercontent.com/cangerx/clawpanel/main/deploy.sh | bash
 
 # 国内网络也可将上面的 GitHub 原始地址替换为：
 # https://gitee.com/cangerx/clawpanel/raw/main/deploy.sh

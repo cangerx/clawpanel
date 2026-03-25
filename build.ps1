@@ -119,5 +119,5 @@ if ($Debug) {
 
 Write-Host ""
 Write-Host "  提示: 发布跨平台版本请推送 tag，例如:" -ForegroundColor DarkGray
-Write-Host "    git tag v1.0.0 && git push origin v1.0.0" -ForegroundColor DarkGray
+Write-Host "    git tag v1.0.1 && git push origin v1.0.1" -ForegroundColor DarkGray
 Write-Host ""

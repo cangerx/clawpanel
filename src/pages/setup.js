@@ -18,8 +18,8 @@ export async function render() {
   page.innerHTML = `
     <div class="setup-container">
       <div class="setup-header">
-        <img src="/images/logo-brand.png" alt="ClawPanel" class="setup-logo">
-        <h1 class="setup-title">欢迎使用 ClawPanel</h1>
+        <img src="/images/logo-brand.png" alt="Cpanel" class="setup-logo">
+        <h1 class="setup-title">欢迎使用 Cpanel</h1>
         <p class="setup-subtitle">OpenClaw AI Agent 框架的桌面管理面板</p>
       </div>
 
@@ -163,8 +163,8 @@ function renderSteps(page, { node, git, cliOk, config, version }) {
         <div style="margin-top:var(--space-sm);padding:8px 12px;background:var(--bg-tertiary);border-radius:var(--radius-sm);font-size:var(--font-size-xs);color:var(--text-secondary);line-height:1.6">
           <strong>已经装了但检测不到？</strong>
           ${isMacPlatform()
-            ? `macOS 上从 Finder 启动可能找不到 Node.js。试试关掉 ClawPanel 后从终端启动：<br>
-               <code style="background:var(--bg-secondary);padding:2px 6px;border-radius:3px;user-select:all">open /Applications/ClawPanel.app</code>`
+            ? `macOS 上从 Finder 启动可能找不到 Node.js。试试关掉 Cpanel 后从终端启动：<br>
+               <code style="background:var(--bg-secondary);padding:2px 6px;border-radius:3px;user-select:all">open /Applications/Cpanel.app</code>`
             : `安装 Node.js 后点击「重新检测」或使用下方「自动扫描」，无需重启。`
           }
           <div style="margin-top:8px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
@@ -326,7 +326,7 @@ function renderInstallSection() {
     envHint = `
       <div style="margin-top:var(--space-sm);padding:10px 12px;background:var(--bg-tertiary);border-radius:var(--radius-sm);border-left:3px solid var(--warning);font-size:var(--font-size-xs);color:var(--text-secondary);line-height:1.7">
         <strong style="color:var(--text-primary)">找不到已安装的 OpenClaw？</strong>
-        <p style="margin:6px 0 2px">ClawPanel 桌面版只能管理<strong>本机</strong>安装的 OpenClaw。以下环境中的安装无法被检测到：</p>
+        <p style="margin:6px 0 2px">Cpanel 桌面版只能管理<strong>本机</strong>安装的 OpenClaw。以下环境中的安装无法被检测到：</p>
         <ul style="margin:4px 0 8px 16px;padding:0">
           ${isWin ? `
             <li><strong>WSL (Windows 子系统)</strong> — OpenClaw 装在 WSL 里，Windows 侧无法访问</li>
@@ -348,7 +348,7 @@ function renderInstallSection() {
             ${isWin ? `
               <div style="margin-bottom:10px">
                 <div style="font-weight:600;margin-bottom:4px">WSL 中使用 Web 版：</div>
-                <div style="margin-bottom:2px;opacity:0.8">打开 WSL 终端，一键部署 ClawPanel Web 版：</div>
+                <div style="margin-bottom:2px;opacity:0.8">打开 WSL 终端，一键部署 Cpanel Web 版：</div>
                 <code style="display:block;background:var(--bg-secondary);padding:6px 10px;border-radius:4px;user-select:all;word-break:break-all">curl -fsSL https://raw.githubusercontent.com/cangerx/clawpanel/main/deploy.sh | bash</code>
                 <div style="margin-top:4px;opacity:0.7">会安装最新主线 Web 版到当前环境。</div>
                 <div style="margin-top:4px;opacity:0.7">部署后在浏览器访问 WSL 的 IP 即可管理。</div>
@@ -356,7 +356,7 @@ function renderInstallSection() {
             ` : ''}
             <div style="margin-bottom:10px">
               <div style="font-weight:600;margin-bottom:4px">Docker 容器中使用：</div>
-              <div style="margin-bottom:2px;opacity:0.8">在容器内安装 OpenClaw + ClawPanel Web 版：</div>
+              <div style="margin-bottom:2px;opacity:0.8">在容器内安装 OpenClaw + Cpanel Web 版：</div>
               <code style="display:block;background:var(--bg-secondary);padding:6px 10px;border-radius:4px;user-select:all;word-break:break-all;margin-bottom:4px">npm i -g @qingchencloud/openclaw-zh</code>
               <code style="display:block;background:var(--bg-secondary);padding:6px 10px;border-radius:4px;user-select:all;word-break:break-all">curl -fsSL https://raw.githubusercontent.com/cangerx/clawpanel/main/deploy.sh | bash</code>
               <div style="margin-top:4px;opacity:0.7">会安装最新主线 Web 版到当前环境。</div>
@@ -377,7 +377,7 @@ function renderInstallSection() {
 
   return `
     <p style="color:var(--text-secondary);font-size:var(--font-size-sm);margin-bottom:var(--space-sm)">
-      点击安装后，将默认安装当前 ClawPanel 版本绑定的推荐稳定版；如需升降级，可稍后到「关于」页面切换版本。
+      点击安装后，将默认安装当前 Cpanel 版本绑定的推荐稳定版；如需升降级，可稍后到「关于」页面切换版本。
     </p>
     <p style="color:var(--text-tertiary);font-size:var(--font-size-xs);line-height:1.6;margin:-4px 0 var(--space-sm)">
       如果你是为了体验最新版功能，建议先安装推荐稳定版再手动切换；若希望面板优先适配最新版，欢迎提交 issue。
@@ -796,7 +796,7 @@ function bindEvents(page, nodeOk, detectState) {
 
 function showSetupGuideModal() {
   const overlay = showContentModal({
-    title: '欢迎使用 ClawPanel',
+    title: '欢迎使用 Cpanel',
     width: 520,
     content: `
       <p style="color:var(--text-secondary);margin-bottom:var(--space-lg);line-height:1.6">
