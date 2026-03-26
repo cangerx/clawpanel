@@ -388,10 +388,10 @@ source_probe_urls() {
   local github_url gitee_url
   if [ "$REF" = "main" ]; then
     github_url="$GITHUB_ARCHIVE_BASE/heads/main.tar.gz"
-    gitee_url="$GITEE_ARCHIVE_BASE?ref=main&format=tgz"
+    gitee_url="$GITEE_ARCHIVE_BASE/main.tar.gz"
   else
     github_url="$GITHUB_ARCHIVE_BASE/tags/$REF.tar.gz"
-    gitee_url="$GITEE_ARCHIVE_BASE?ref=$REF&format=tgz"
+    gitee_url="$GITEE_ARCHIVE_BASE/$REF.tar.gz"
   fi
   printf '%s\n%s\n' "$github_url" "$gitee_url"
 }
@@ -517,20 +517,20 @@ resolve_target() {
   ensure_source_labels
   if [ "$REF" = "main" ]; then
     if [ "$SOURCE_PREFERENCE" = "gitee" ]; then
-      DOWNLOAD_URL="$GITEE_ARCHIVE_BASE?ref=main&format=tgz"
+      DOWNLOAD_URL="$GITEE_ARCHIVE_BASE/main.tar.gz"
       DOWNLOAD_URL_ALT="$GITHUB_ARCHIVE_BASE/heads/main.tar.gz"
     else
       DOWNLOAD_URL="$GITHUB_ARCHIVE_BASE/heads/main.tar.gz"
-      DOWNLOAD_URL_ALT="$GITEE_ARCHIVE_BASE?ref=main&format=tgz"
+      DOWNLOAD_URL_ALT="$GITEE_ARCHIVE_BASE/main.tar.gz"
     fi
     VERSION_LABEL="main"
   else
     if [ "$SOURCE_PREFERENCE" = "gitee" ]; then
-      DOWNLOAD_URL="$GITEE_ARCHIVE_BASE?ref=$REF&format=tgz"
+      DOWNLOAD_URL="$GITEE_ARCHIVE_BASE/$REF.tar.gz"
       DOWNLOAD_URL_ALT="$GITHUB_ARCHIVE_BASE/tags/$REF.tar.gz"
     else
       DOWNLOAD_URL="$GITHUB_ARCHIVE_BASE/tags/$REF.tar.gz"
-      DOWNLOAD_URL_ALT="$GITEE_ARCHIVE_BASE?ref=$REF&format=tgz"
+      DOWNLOAD_URL_ALT="$GITEE_ARCHIVE_BASE/$REF.tar.gz"
     fi
     VERSION_LABEL="$REF"
   fi
