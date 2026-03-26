@@ -126,7 +126,7 @@ docker run -d \
   -p 1420:1420 \
   -v clawpanel-data:/root/.openclaw \
   node:22-slim \
-  sh -c "apt-get update && apt-get install -y git && npm install -g @qingchencloud/openclaw-zh --registry https://registry.npmmirror.com && openclaw init 2>/dev/null || true && git clone https://github.com/cangerx/clawpanel.git /app && cd /app && npm install && npm run build && npm run serve"
+  sh -c "apt-get update && apt-get install -y git && npm install -g openclaw --registry https://registry.npmjs.org && openclaw init 2>/dev/null || true && git clone https://github.com/cangerx/clawpanel.git /app && cd /app && npm install && npm run build && npm run serve"
 ```
 
 访问 `http://服务器IP:1420`。生产环境建议使用 Compose，详见 [Docker 部署指南](docs/docker-deploy.md)。
@@ -474,7 +474,7 @@ open /Applications/Cpanel.app
 1. 以管理员身份运行 Cpanel
 2. 或打开 PowerShell（管理员）手动安装：
    ```powershell
-   npm install -g @qingchencloud/openclaw-zh --registry https://registry.npmmirror.com
+   npm install -g openclaw --registry https://registry.npmjs.org
    ```
 3. 如果仍报错，清理 npm 缓存：`npm cache clean --force`
 
@@ -495,7 +495,7 @@ git config --global url."https://github.com/".insteadOf git@github.com:
 
 ```powershell
 npm cache clean --force
-npm install -g @qingchencloud/openclaw-zh --registry https://registry.npmmirror.com
+npm install -g openclaw --registry https://registry.npmjs.org
 ```
 
 ### 安装后 Node.js 检测不到（Windows）
