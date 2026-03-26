@@ -332,17 +332,23 @@ async function boot() {
     setTimeout(() => splash.remove(), 500)
   }
 
-  // 默认密码提醒横幅
+  // 默认密码提醒（右上角 Toast）
   if (sessionStorage.getItem('clawpanel_must_change_pw') === '1') {
-    const banner = document.createElement('div')
-    banner.id = 'pw-change-banner'
-    banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:999;background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;padding:10px 20px;display:flex;align-items:center;justify-content:center;gap:12px;font-size:13px;font-weight:500;box-shadow:0 2px 8px rgba(0,0,0,0.15)'
-    banner.innerHTML = `
-      <span>${statusIcon('warn', 14)} 当前使用的是系统生成的默认密码，为了安全请尽快修改</span>
-      <a href="#/security" style="color:#fff;background:rgba(255,255,255,0.2);padding:4px 14px;border-radius:6px;text-decoration:none;font-size:12px;font-weight:600" onclick="document.getElementById('pw-change-banner').remove();sessionStorage.removeItem('clawpanel_must_change_pw')">前往安全设置</a>
-      <button onclick="this.parentElement.remove()" style="background:none;border:none;color:rgba(255,255,255,0.7);cursor:pointer;font-size:16px;padding:0 4px;margin-left:4px">✕</button>
-    `
-    document.body.prepend(banner)
+    import('./components/toast.js').then(({ toast }) => {
+      const actionBtn = document.createElement('button')
+      actionBtn.className = 'btn btn-primary btn-sm'
+      actionBtn.style.pointerEvents = 'auto'
+      actionBtn.textContent = '前往安全设置'
+      actionBtn.addEventListener('click', () => {
+        sessionStorage.removeItem('clawpanel_must_change_pw')
+        navigate('/security')
+      })
+
+      toast('当前使用的是系统生成的默认密码，为了安全请尽快修改', 'success', {
+        duration: 10000,
+        action: actionBtn,
+      })
+    }).catch(() => {})
   }
 
   // Tauri 模式：确保 web session 存在（页面刷新后 cookie 可能丢失），然后加载实例和检测状态
@@ -627,18 +633,62 @@ async function checkGlobalUpdate() {
   if (!banner) return
 
   try {
-    const info = await api.checkFrontendUpdate()
-    if (!info.hasUpdate) return
+    const [info, status, cfg] = await Promise.all([
+      api.checkFrontendUpdate(),
+      api.getUpdateStatus().catch(() => ({})),
+      api.readPanelConfig().catch(() => ({ updates: {} })),
+    ])
+
+    const updates = cfg?.updates || {}
+    const frontendEnabled = updates?.frontend?.enabled !== false
+    const currentMode = updates?.mode || 'notify'
+    const isAuto = currentMode === 'background' && frontendEnabled
+    const readyVersion = status?.updateVersion || info.manifest?.version || info.latestVersion || ''
+
+    if (info.updateReady && readyVersion) {
+      banner.classList.remove('update-banner-hidden')
+      banner.innerHTML = `
+        <div class="update-banner-content">
+          <div class="update-banner-text">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M5 12l5 5L20 7"/></svg>
+            <span class="update-banner-ver">Cpanel v${readyVersion} 已下载完成</span>
+            <span class="update-banner-changelog">· 重载页面后生效</span>
+          </div>
+          <button class="btn btn-sm" id="btn-update-reload">立即重载</button>
+          <button class="btn btn-sm" id="btn-update-rollback">回退</button>
+          <button class="update-banner-close" id="btn-update-dismiss" title="关闭提示">✕</button>
+        </div>
+      `
+      banner.querySelector('#btn-update-reload')?.addEventListener('click', () => window.location.reload())
+      banner.querySelector('#btn-update-rollback')?.addEventListener('click', async () => {
+        try {
+          await api.rollbackFrontendUpdate()
+          banner.classList.add('update-banner-hidden')
+          const { toast } = await import('./components/toast.js')
+          toast('已回退到内置版本', 'success')
+        } catch (e) {
+          const { toast } = await import('./components/toast.js')
+          toast('回退失败: ' + (e.message || e), 'error')
+        }
+      })
+      banner.querySelector('#btn-update-dismiss')?.addEventListener('click', () => {
+        banner.classList.add('update-banner-hidden')
+      })
+      return
+    }
+
+    if (!info.hasUpdate) {
+      banner.classList.add('update-banner-hidden')
+      return
+    }
 
     const ver = info.latestVersion || info.manifest?.version || ''
     if (!ver) return
 
-    // 用户已忽略过该版本，不再打扰
     const dismissed = sessionStorage.getItem('clawpanel_update_dismissed')
     if (dismissed === ver) return
 
     const changelog = info.manifest?.changelog || ''
-    const isWeb = !window.__TAURI_INTERNALS__
 
     banner.classList.remove('update-banner-hidden')
     banner.innerHTML = `
@@ -647,54 +697,19 @@ async function checkGlobalUpdate() {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           <span class="update-banner-ver">Cpanel v${ver} 可用</span>
           ${changelog ? `<span class="update-banner-changelog">· ${changelog}</span>` : ''}
+          ${isAuto ? '<span class="update-banner-changelog">· 后台自动更新已开启</span>' : ''}
         </div>
-        ${isWeb
-          ? `<button class="btn btn-sm" id="btn-update-show-cmd">更新方法</button>
-             <a class="btn btn-sm" href="https://github.com/cangerx/clawpanel/releases" target="_blank" rel="noopener">Release Notes</a>`
-          : `<button class="btn btn-sm" id="btn-update-hot">热更新</button>
-             <a class="btn btn-sm" href="https://github.com/cangerx/clawpanel/releases" target="_blank" rel="noopener">完整安装包</a>`
-        }
+        <button class="btn btn-sm" id="btn-update-hot">${isAuto ? '立即下载' : '热更新'}</button>
+        <a class="btn btn-sm" href="https://github.com/cangerx/clawpanel/releases" target="_blank" rel="noopener">Release Notes</a>
         <button class="update-banner-close" id="btn-update-dismiss" title="忽略此版本">✕</button>
       </div>
     `
 
-    // 关闭按钮：记住忽略的版本
     banner.querySelector('#btn-update-dismiss')?.addEventListener('click', () => {
       sessionStorage.setItem('clawpanel_update_dismissed', ver)
       banner.classList.add('update-banner-hidden')
     })
 
-    // Web 模式：显示更新命令弹窗
-    banner.querySelector('#btn-update-show-cmd')?.addEventListener('click', () => {
-      const overlay = document.createElement('div')
-      overlay.className = 'modal-overlay'
-      overlay.innerHTML = `
-        <div class="modal" style="max-width:480px">
-          <div class="modal-title">更新到 v${ver}</div>
-          <div style="font-size:var(--font-size-sm);line-height:1.8">
-            <p style="margin-bottom:12px">在服务器上执行以下命令：</p>
-            <pre style="background:var(--bg-tertiary);padding:12px 16px;border-radius:var(--radius-md);font-family:var(--font-mono);font-size:var(--font-size-xs);overflow-x:auto;white-space:pre-wrap;user-select:all">cd /opt/clawpanel
-git pull origin main
-npm install
-npm run build
-sudo systemctl restart clawpanel</pre>
-            <p style="margin-top:12px;color:var(--text-tertiary);font-size:var(--font-size-xs)">
-              如果 git pull 失败，可先执行 <code style="background:var(--bg-tertiary);padding:2px 6px;border-radius:4px">git checkout -- .</code> 丢弃本地修改。<br>
-              路径请替换为实际的 Cpanel 安装目录。
-            </p>
-          </div>
-          <div class="modal-actions">
-            <button class="btn btn-secondary btn-sm" data-action="close">关闭</button>
-          </div>
-        </div>
-      `
-      document.body.appendChild(overlay)
-      overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove() })
-      overlay.querySelector('[data-action="close"]').onclick = () => overlay.remove()
-      overlay.addEventListener('keydown', (e) => { if (e.key === 'Escape') overlay.remove() })
-    })
-
-    // Tauri 热更新按钮
     banner.querySelector('#btn-update-hot')?.addEventListener('click', async () => {
       const btn = banner.querySelector('#btn-update-hot')
       if (!btn) return
@@ -702,9 +717,7 @@ sudo systemctl restart clawpanel</pre>
       btn.textContent = '下载中...'
       try {
         await api.downloadFrontendUpdate(info.manifest?.url || '', info.manifest?.hash || '')
-        btn.textContent = '重载应用'
-        btn.disabled = false
-        btn.onclick = () => window.location.reload()
+        await checkGlobalUpdate()
       } catch (e) {
         btn.textContent = '下载失败'
         btn.disabled = false
@@ -713,7 +726,7 @@ sudo systemctl restart clawpanel</pre>
       }
     })
   } catch {
-    // 检查失败静默忽略
+    banner.classList.add('update-banner-hidden')
   }
 }
 

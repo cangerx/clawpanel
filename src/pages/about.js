@@ -399,18 +399,50 @@ async function doInstall(page, title, source, version) {
 
 async function checkHotUpdate(cards, panelVersion) {
   const el = () => cards.querySelector('#panel-update-meta')
+  const modeLabel = {
+    manual: '手动',
+    notify: '提醒',
+    background: '后台自动',
+  }
+
   try {
-    const info = await api.checkFrontendUpdate()
+    const [info, status, cfg] = await Promise.all([
+      api.checkFrontendUpdate(),
+      api.getUpdateStatus().catch(() => ({})),
+      api.readPanelConfig().catch(() => ({ updates: {} })),
+    ])
     const meta = el()
     if (!meta) return
 
+    const updates = cfg?.updates || {}
+    const frontendEnabled = updates?.frontend?.enabled !== false
+    const currentMode = updates?.mode || 'notify'
+    const lastCheckAt = status?.lastCheckAt
+      ? new Date(status.lastCheckAt).toLocaleString()
+      : '未检查'
+    const lastError = status?.lastError
+      ? `<div style="font-size:var(--font-size-xs);color:var(--error)">最近错误：${String(status.lastError)}</div>`
+      : ''
+    const statusLine = `
+      <div style="display:flex;flex-wrap:wrap;gap:8px;font-size:var(--font-size-xs);color:var(--text-tertiary)">
+        <span>策略：${modeLabel[currentMode] || currentMode}</span>
+        <span>前端自动更新：${frontendEnabled ? '开启' : '关闭'}</span>
+        <span>最近检查：${lastCheckAt}</span>
+      </div>
+      ${lastError}
+    `
+
     if (info.updateReady) {
-      // 已下载更新，等待重载
-      const ver = info.manifest?.version || info.latestVersion || ''
+      const ver = status?.updateVersion || info.manifest?.version || info.latestVersion || ''
       meta.innerHTML = `
-        <span style="color:var(--accent)">v${ver} 已就绪</span>
-        <button class="btn btn-primary btn-sm" id="btn-hot-reload" style="padding:2px 8px;font-size:var(--font-size-xs)">重载应用</button>
-        <button class="btn btn-secondary btn-sm" id="btn-hot-rollback" style="padding:2px 8px;font-size:var(--font-size-xs)">回退</button>
+        <div style="display:flex;flex-direction:column;gap:8px;width:100%">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span style="color:var(--accent)">v${ver} 已就绪</span>
+            <button class="btn btn-primary btn-sm" id="btn-hot-reload" style="padding:2px 8px;font-size:var(--font-size-xs)">重载应用</button>
+            <button class="btn btn-secondary btn-sm" id="btn-hot-rollback" style="padding:2px 8px;font-size:var(--font-size-xs)">回退</button>
+          </div>
+          ${statusLine}
+        </div>
       `
       meta.querySelector('#btn-hot-reload')?.addEventListener('click', () => {
         window.location.reload()
@@ -418,22 +450,30 @@ async function checkHotUpdate(cards, panelVersion) {
       meta.querySelector('#btn-hot-rollback')?.addEventListener('click', async () => {
         try {
           await api.rollbackFrontendUpdate()
-          toast('已回退到内嵌版本，重载中...', 'success')
+          toast('已回退到内置版本，重载中...', 'success')
           setTimeout(() => window.location.reload(), 800)
         } catch (e) {
           toast('回退失败: ' + (e.message || e), 'error')
         }
       })
     } else if (info.hasUpdate) {
-      // 有新版本可下载
       const ver = info.latestVersion
       const manifest = info.manifest || {}
       const changelog = manifest.changelog || ''
+      const autoHint = currentMode === 'background' && frontendEnabled
+        ? '<span style="color:var(--text-tertiary);font-size:var(--font-size-xs)">后台自动更新已开启，可等待后台下载或立即手动触发</span>'
+        : ''
       meta.innerHTML = `
-        <span style="color:var(--accent)">新版本: v${ver}</span>
-        ${changelog ? `<span style="color:var(--text-tertiary);font-size:var(--font-size-xs)">${changelog}</span>` : ''}
-        <button class="btn btn-primary btn-sm" id="btn-hot-download" style="padding:2px 8px;font-size:var(--font-size-xs)">热更新</button>
-        <a class="btn btn-secondary btn-sm" href="https://github.com/cangerx/clawpanel/releases" target="_blank" rel="noopener" style="padding:2px 8px;font-size:var(--font-size-xs)">完整安装包</a>
+        <div style="display:flex;flex-direction:column;gap:8px;width:100%">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span style="color:var(--accent)">新版本: v${ver}</span>
+            ${changelog ? `<span style="color:var(--text-tertiary);font-size:var(--font-size-xs)">${changelog}</span>` : ''}
+            <button class="btn btn-primary btn-sm" id="btn-hot-download" style="padding:2px 8px;font-size:var(--font-size-xs)">热更新</button>
+            <a class="btn btn-secondary btn-sm" href="https://github.com/cangerx/clawpanel/releases" target="_blank" rel="noopener" style="padding:2px 8px;font-size:var(--font-size-xs)">完整安装包</a>
+          </div>
+          ${autoHint}
+          ${statusLine}
+        </div>
       `
       meta.querySelector('#btn-hot-download')?.addEventListener('click', async () => {
         const btn = meta.querySelector('#btn-hot-download')
@@ -448,9 +488,19 @@ async function checkHotUpdate(cards, panelVersion) {
         }
       })
     } else if (!info.compatible) {
-      meta.innerHTML = '<span style="color:var(--text-tertiary)">需要更新完整安装包</span> <a class="btn btn-primary btn-sm" href="https://api.772.ee/" target="_blank" rel="noopener" style="padding:2px 8px;font-size:var(--font-size-xs)">前往官网下载</a>'
+      meta.innerHTML = `
+        <div style="display:flex;flex-direction:column;gap:8px;width:100%">
+          <div><span style="color:var(--text-tertiary)">需要更新完整安装包</span> <a class="btn btn-primary btn-sm" href="https://api.772.ee/" target="_blank" rel="noopener" style="padding:2px 8px;font-size:var(--font-size-xs)">前往官网下载</a></div>
+          ${statusLine}
+        </div>
+      `
     } else {
-      meta.innerHTML = '<span style="color:var(--success)">已是最新</span>'
+      meta.innerHTML = `
+        <div style="display:flex;flex-direction:column;gap:8px;width:100%">
+          <div><span style="color:var(--success)">已是最新</span></div>
+          ${statusLine}
+        </div>
+      `
     }
   } catch (err) {
     const meta = el()

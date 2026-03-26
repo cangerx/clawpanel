@@ -241,10 +241,8 @@ function bindSecurityEvents(container, status) {
         msgEl.textContent = '密码修改成功'
         msgEl.style.color = 'var(--success)'
         toast('密码已更新', 'success')
-        // 清除默认密码横幅
+        // 清除默认密码提醒标记
         sessionStorage.removeItem('clawpanel_must_change_pw')
-        const banner = document.getElementById('pw-change-banner')
-        if (banner) banner.remove()
         setTimeout(() => loadStatus(container.closest('.page')), 1000)
       } catch (err) {
         msgEl.textContent = err.message

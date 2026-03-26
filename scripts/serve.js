@@ -20,8 +20,8 @@ import { _initApi, _apiMiddleware } from './dev-api.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const DIST_DIR = path.resolve(__dirname, '..', 'dist')
+const WEB_UPDATE_DIR = path.join(homedir(), '.openclaw', 'clawpanel', 'web-update')
 
-// === 解析命令行参数 ===
 function parseArgs() {
   const args = process.argv.slice(2)
   let host = process.env.HOST || '0.0.0.0'
@@ -56,7 +56,6 @@ ClawPanel Web Server (Headless)
   return { host, port }
 }
 
-// === MIME 类型映射 ===
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'application/javascript; charset=utf-8',
@@ -78,42 +77,55 @@ const MIME_TYPES = {
   '.map': 'application/json',
 }
 
-// === 静态文件服务 ===
-function serveStatic(req, res) {
-  // URL 去掉 query string
-  const urlPath = req.url.split('?')[0]
-  let filePath = path.join(DIST_DIR, urlPath === '/' ? 'index.html' : urlPath)
+function resolveCandidate(root, relativePath) {
+  const normalized = String(relativePath || '').replace(/^\/+/, '')
+  if (!normalized) return null
+  const fullPath = path.resolve(root, normalized)
+  if (!fullPath.startsWith(root + path.sep) && fullPath !== root) return null
+  if (fs.existsSync(fullPath) && fs.statSync(fullPath).isFile()) return fullPath
+  if (!path.extname(normalized)) {
+    const nestedIndex = path.resolve(root, normalized, 'index.html')
+    if (nestedIndex.startsWith(root + path.sep) && fs.existsSync(nestedIndex) && fs.statSync(nestedIndex).isFile()) {
+      return nestedIndex
+    }
+  }
+  return null
+}
 
-  // 安全检查：不允许目录遍历
-  if (!filePath.startsWith(DIST_DIR)) {
-    res.statusCode = 403
-    res.end('Forbidden')
+function resolveRequestedFile(urlPath) {
+  const relativePath = urlPath === '/' ? 'index.html' : urlPath
+  return resolveCandidate(WEB_UPDATE_DIR, relativePath)
+    || resolveCandidate(DIST_DIR, relativePath)
+}
+
+function resolveSpaIndex() {
+  const overlayIndex = path.join(WEB_UPDATE_DIR, 'index.html')
+  if (fs.existsSync(overlayIndex)) return overlayIndex
+  return path.join(DIST_DIR, 'index.html')
+}
+
+function serveStatic(req, res) {
+  const urlPath = req.url.split('?')[0]
+  const filePath = resolveRequestedFile(urlPath)
+
+  if (filePath) {
+    sendFile(res, filePath)
     return
   }
 
-  // 尝试读取文件
-  fs.stat(filePath, (err, stats) => {
-    if (!err && stats.isFile()) {
-      sendFile(res, filePath)
-      return
-    }
-
-    // SPA fallback：非 API、非静态资源 → index.html
-    const ext = path.extname(urlPath)
-    if (!ext || ext === '.html') {
-      sendFile(res, path.join(DIST_DIR, 'index.html'))
-    } else {
-      res.statusCode = 404
-      res.end('Not Found')
-    }
-  })
+  const ext = path.extname(urlPath)
+  if (!ext || ext === '.html') {
+    sendFile(res, resolveSpaIndex())
+  } else {
+    res.statusCode = 404
+    res.end('Not Found')
+  }
 }
 
 function sendFile(res, filePath) {
   const ext = path.extname(filePath)
   const contentType = MIME_TYPES[ext] || 'application/octet-stream'
 
-  // 缓存策略：资源文件长缓存，HTML 不缓存
   if (ext === '.html') {
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate')
   } else if (filePath.includes(`${path.sep}assets${path.sep}`)) {
@@ -124,34 +136,30 @@ function sendFile(res, filePath) {
   fs.createReadStream(filePath).pipe(res)
 }
 
-// === 启动服务器 ===
 async function main() {
-  // 检查 dist 目录
   if (!fs.existsSync(path.join(DIST_DIR, 'index.html'))) {
     console.error('❌ 未找到 dist/index.html，请先运行: npm run build')
     process.exit(1)
   }
 
   const { host, port } = parseArgs()
-
-  // 初始化 API
   _initApi()
 
   const server = http.createServer(async (req, res) => {
-    // CORS 头（方便开发调试）
     res.setHeader('Access-Control-Allow-Origin', '*')
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
-    if (req.method === 'OPTIONS') { res.statusCode = 204; res.end(); return }
+    if (req.method === 'OPTIONS') {
+      res.statusCode = 204
+      res.end()
+      return
+    }
 
-    // API 请求
     await _apiMiddleware(req, res, () => {
-      // 非 API → 静态文件
       serveStatic(req, res)
     })
   })
 
-  // WebSocket 代理
   let gatewayPort = 18789
   try {
     const cfgPath = path.join(homedir(), '.openclaw', 'openclaw.json')
@@ -197,7 +205,6 @@ async function main() {
     console.log('')
   })
 
-  // 优雅退出
   process.on('SIGINT', () => { console.log('\n  👋 服务已停止'); process.exit(0) })
   process.on('SIGTERM', () => { console.log('\n  👋 服务已停止'); process.exit(0) })
 }

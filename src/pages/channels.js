@@ -446,6 +446,15 @@ function getPlatformPluginMeta(pid, formScope = document) {
   return { pluginId, pluginPackage, uninstallLabel }
 }
 
+function ensureLatestPackageName(packageName) {
+  const raw = String(packageName || '').trim()
+  if (!raw) return ''
+  const lastSlash = raw.lastIndexOf('/')
+  const lastAt = raw.lastIndexOf('@')
+  const hasVersion = lastAt > lastSlash
+  return hasVersion ? raw : `${raw}@latest`
+}
+
 async function handleUninstallPlugin(pid, page, state, btn) {
   const reg = PLATFORM_REGISTRY[pid]
   const meta = getPlatformPluginMeta(pid)
@@ -479,6 +488,46 @@ async function handleUninstallPlugin(pid, page, state, btn) {
     btn.disabled = false
     if (prevHtml) btn.innerHTML = prevHtml
     else btn.textContent = prevText || '卸载插件'
+  }
+}
+
+async function handleUpdatePlugin(pid, page, state, btn) {
+  const reg = PLATFORM_REGISTRY[pid]
+  const meta = getPlatformPluginMeta(pid)
+  if (!reg || !meta) return
+
+  const label = meta.uninstallLabel || reg.label || pid
+  const latestPackage = ensureLatestPackageName(meta.pluginPackage)
+  if (!latestPackage) {
+    toast('插件包名无效，无法更新', 'error')
+    return
+  }
+
+  const yes = await showConfirm(`确定将 ${label} 更新到最新版？\n将执行安装命令并自动覆盖旧版本。`)
+  if (!yes) return
+
+  const prevHtml = btn?.innerHTML
+  const prevText = btn?.textContent
+  if (btn) {
+    btn.classList.add('btn-loading')
+    btn.disabled = true
+    btn.textContent = '更新中...'
+  }
+
+  try {
+    await api.installChannelPlugin(latestPackage, meta.pluginId)
+    _pluginStatusCache.delete(pid)
+    toast(`${label} 已更新到最新版`, 'success')
+    await loadPlatforms(page, state)
+  } catch (e) {
+    toast('更新失败: ' + e, 'error')
+  }
+
+  if (btn) {
+    btn.classList.remove('btn-loading')
+    btn.disabled = false
+    if (prevHtml) btn.innerHTML = prevHtml
+    else btn.textContent = prevText || '更新插件'
   }
 }
 
@@ -516,6 +565,7 @@ function renderConfigured(page, state) {
             : ''
           const pluginState = state.pluginStatus[p.id]
           const canUninstallPlugin = !!(reg?.pluginRequired && pluginState && pluginState.installed && !pluginState.builtin)
+          const canUpdatePlugin = !!(reg?.pluginRequired && pluginState && pluginState.installed && !pluginState.builtin)
           return `
             <div class="platform-card ${p.enabled ? 'active' : 'inactive'}" data-pid="${p.id}">
               <div class="platform-card-header">
@@ -529,6 +579,7 @@ function renderConfigured(page, state) {
               <div class="platform-card-actions">
                 <button class="btn btn-sm btn-secondary" data-action="edit">${icon('edit', 14)} 编辑</button>
                 <button class="btn btn-sm btn-secondary" data-action="toggle">${p.enabled ? icon('pause', 14) + ' 禁用' : icon('play', 14) + ' 启用'}</button>
+                ${canUpdatePlugin ? `<button class="btn btn-sm btn-secondary" data-action="update-plugin">${icon('refresh-cw', 14)} 更新插件</button>` : ''}
                 ${canUninstallPlugin ? `<button class="btn btn-sm btn-secondary" data-action="uninstall-plugin">${icon('trash', 14)} 卸载插件</button>` : ''}
                 <button class="btn btn-sm btn-danger" data-action="remove">${icon('trash', 14)}</button>
               </div>
@@ -554,9 +605,13 @@ function renderConfigured(page, state) {
         btn.innerHTML = prev
       }
     }
+    const updatePluginBtn = card.querySelector('[data-action="update-plugin"]')
     const uninstallPluginBtn = card.querySelector('[data-action="uninstall-plugin"]')
     const toggleBtn = card.querySelector('[data-action="toggle"]')
     const removeBtn = card.querySelector('[data-action="remove"]')
+    if (updatePluginBtn) updatePluginBtn.onclick = async () => {
+      await handleUpdatePlugin(pid, page, state, updatePluginBtn)
+    }
     if (uninstallPluginBtn) uninstallPluginBtn.onclick = async () => {
       await handleUninstallPlugin(pid, page, state, uninstallPluginBtn)
     }

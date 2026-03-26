@@ -3140,6 +3140,98 @@ pub async fn check_panel_update() -> Result<Value, String> {
 
 // === 面板配置 (clawpanel.json) ===
 
+const DEFAULT_UPDATE_MODE: &str = "notify";
+const DEFAULT_UPDATE_INTERVAL_MINUTES: u64 = 30;
+const MIN_UPDATE_INTERVAL_MINUTES: u64 = 5;
+const MAX_UPDATE_INTERVAL_MINUTES: u64 = 24 * 60;
+
+fn normalize_update_mode(mode: Option<&str>) -> &'static str {
+    match mode.unwrap_or(DEFAULT_UPDATE_MODE) {
+        "manual" => "manual",
+        "notify" => "notify",
+        "background" => "background",
+        _ => DEFAULT_UPDATE_MODE,
+    }
+}
+
+fn normalize_update_interval_minutes(value: Option<u64>) -> u64 {
+    value
+        .unwrap_or(DEFAULT_UPDATE_INTERVAL_MINUTES)
+        .clamp(MIN_UPDATE_INTERVAL_MINUTES, MAX_UPDATE_INTERVAL_MINUTES)
+}
+
+pub(crate) fn normalize_panel_config_value(mut config: Value) -> Value {
+    if !config.is_object() {
+        config = json!({});
+    }
+
+    let root = config.as_object_mut().expect("panel config must be object");
+    let updates = root
+        .get("updates")
+        .and_then(|value| value.as_object())
+        .cloned()
+        .unwrap_or_default();
+    let frontend = updates
+        .get("frontend")
+        .and_then(|value| value.as_object())
+        .cloned()
+        .unwrap_or_default();
+    let plugins = updates
+        .get("plugins")
+        .and_then(|value| value.as_object())
+        .cloned()
+        .unwrap_or_default();
+
+    let include = plugins
+        .get("include")
+        .and_then(|value| value.as_array())
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|item| item.as_str().map(|s| s.trim().to_string()))
+                .filter(|item| !item.is_empty())
+                .fold(Vec::<String>::new(), |mut acc, item| {
+                    if !acc.contains(&item) {
+                        acc.push(item);
+                    }
+                    acc
+                })
+        })
+        .unwrap_or_default();
+
+    root.insert(
+        "updates".into(),
+        json!({
+            "mode": normalize_update_mode(updates.get("mode").and_then(|value| value.as_str())),
+            "frontend": {
+                "enabled": frontend
+                    .get("enabled")
+                    .and_then(|value| value.as_bool())
+                    .unwrap_or(true)
+            },
+            "plugins": {
+                "enabled": plugins
+                    .get("enabled")
+                    .and_then(|value| value.as_bool())
+                    .unwrap_or(false),
+                "include": include
+            },
+            "intervalMinutes": normalize_update_interval_minutes(
+                updates.get("intervalMinutes").and_then(|value| value.as_u64())
+            ),
+            "requireHashForBackground": updates
+                .get("requireHashForBackground")
+                .and_then(|value| value.as_bool())
+                .unwrap_or(true),
+            "lastCheckAt": updates.get("lastCheckAt").cloned().unwrap_or(Value::Null),
+            "lastResult": updates.get("lastResult").cloned().unwrap_or(Value::Null),
+            "lastError": updates.get("lastError").cloned().unwrap_or(Value::Null)
+        }),
+    );
+
+    config
+}
+
 /// 获取当前生效的 OpenClaw 配置目录路径
 #[tauri::command]
 pub fn get_openclaw_dir() -> Result<Value, String> {
@@ -3160,10 +3252,11 @@ pub fn get_openclaw_dir() -> Result<Value, String> {
 pub fn read_panel_config() -> Result<Value, String> {
     let path = super::panel_config_path();
     if !path.exists() {
-        return Ok(serde_json::json!({}));
+        return Ok(normalize_panel_config_value(json!({})));
     }
     let content = fs::read_to_string(&path).map_err(|e| format!("读取失败: {e}"))?;
-    serde_json::from_str(&content).map_err(|e| format!("解析失败: {e}"))
+    let config: Value = serde_json::from_str(&content).map_err(|e| format!("解析失败: {e}"))?;
+    Ok(normalize_panel_config_value(config))
 }
 
 #[tauri::command]
@@ -3174,7 +3267,8 @@ pub fn write_panel_config(config: Value) -> Result<(), String> {
             fs::create_dir_all(dir).map_err(|e| format!("创建目录失败: {e}"))?;
         }
     }
-    let json = serde_json::to_string_pretty(&config).map_err(|e| format!("序列化失败: {e}"))?;
+    let normalized = normalize_panel_config_value(config);
+    let json = serde_json::to_string_pretty(&normalized).map_err(|e| format!("序列化失败: {e}"))?;
     fs::write(&path, json).map_err(|e| format!("写入失败: {e}"))
 }
 

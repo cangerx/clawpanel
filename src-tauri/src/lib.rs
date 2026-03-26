@@ -57,6 +57,7 @@ pub fn run() {
         })
         .setup(|app| {
             service::start_backend_guardian(app.handle().clone());
+            update::start_background_frontend_updater();
             tray::setup_tray(app.handle())?;
             Ok(())
         })

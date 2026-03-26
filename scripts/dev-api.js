@@ -1003,6 +1003,54 @@ function runCliJsonCommand(command, options = {}) {
 let _panelConfigCache = null
 let _panelConfigCacheTime = 0
 const CONFIG_CACHE_TTL = 2000 // 2s
+const DEFAULT_UPDATE_MODE = 'notify'
+const DEFAULT_UPDATE_INTERVAL_MINUTES = 30
+const MIN_UPDATE_INTERVAL_MINUTES = 5
+const MAX_UPDATE_INTERVAL_MINUTES = 24 * 60
+
+function normalizePanelConfig(input) {
+  const cfg = input && typeof input === 'object'
+    ? JSON.parse(JSON.stringify(input))
+    : {}
+
+  const rawUpdates = cfg.updates && typeof cfg.updates === 'object' ? cfg.updates : {}
+  const rawFrontend = rawUpdates.frontend && typeof rawUpdates.frontend === 'object' ? rawUpdates.frontend : {}
+  const rawPlugins = rawUpdates.plugins && typeof rawUpdates.plugins === 'object' ? rawUpdates.plugins : {}
+  const mode = ['manual', 'notify', 'background'].includes(rawUpdates.mode) ? rawUpdates.mode : DEFAULT_UPDATE_MODE
+  const intervalValue = Number(rawUpdates.intervalMinutes)
+  const intervalMinutes = Number.isFinite(intervalValue)
+    ? Math.min(MAX_UPDATE_INTERVAL_MINUTES, Math.max(MIN_UPDATE_INTERVAL_MINUTES, Math.round(intervalValue)))
+    : DEFAULT_UPDATE_INTERVAL_MINUTES
+  const include = Array.isArray(rawPlugins.include)
+    ? [...new Set(rawPlugins.include.map(v => String(v || '').trim()).filter(Boolean))]
+    : []
+
+  cfg.updates = {
+    mode,
+    frontend: {
+      enabled: rawFrontend.enabled !== false,
+    },
+    plugins: {
+      enabled: rawPlugins.enabled === true,
+      include,
+    },
+    intervalMinutes,
+    requireHashForBackground: rawUpdates.requireHashForBackground !== false,
+    lastCheckAt: rawUpdates.lastCheckAt ?? null,
+    lastResult: rawUpdates.lastResult ?? null,
+    lastError: rawUpdates.lastError ?? null,
+  }
+
+  return cfg
+}
+
+function persistPanelConfig(config) {
+  const normalized = normalizePanelConfig(config)
+  if (!fs.existsSync(OPENCLAW_DIR)) fs.mkdirSync(OPENCLAW_DIR, { recursive: true })
+  fs.writeFileSync(PANEL_CONFIG_PATH, JSON.stringify(normalized, null, 2))
+  invalidateConfigCache()
+  return JSON.parse(JSON.stringify(normalized))
+}
 
 function readPanelConfig() {
   const now = Date.now()
@@ -1011,17 +1059,294 @@ function readPanelConfig() {
   }
   try {
     if (fs.existsSync(PANEL_CONFIG_PATH)) {
-      _panelConfigCache = JSON.parse(fs.readFileSync(PANEL_CONFIG_PATH, 'utf8'))
+      _panelConfigCache = normalizePanelConfig(JSON.parse(fs.readFileSync(PANEL_CONFIG_PATH, 'utf8')))
       _panelConfigCacheTime = now
       return JSON.parse(JSON.stringify(_panelConfigCache))
     }
   } catch {}
-  return {}
+  _panelConfigCache = normalizePanelConfig({})
+  _panelConfigCacheTime = now
+  return JSON.parse(JSON.stringify(_panelConfigCache))
 }
 
 function invalidateConfigCache() {
   _panelConfigCache = null
   _panelConfigCacheTime = 0
+}
+
+const FRONTEND_UPDATE_MANIFEST_URL = 'https://claw.qt.cool/update/latest.json'
+const WEB_UPDATE_DIR = path.join(OPENCLAW_DIR, 'clawpanel', 'web-update')
+const WEB_UPDATE_STAGE_DIR = path.join(OPENCLAW_DIR, 'clawpanel', 'web-update.staging')
+const WEB_UPDATE_BACKUP_DIR = path.join(OPENCLAW_DIR, 'clawpanel', 'web-update.bak')
+const WEB_UPDATE_STATE_FILE = '.state.json'
+const WEB_UPDATE_VERSION_FILE = '.version'
+let _frontendUpdaterStarted = false
+let _frontendUpdaterTimer = null
+
+function nowIso() {
+  return new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
+}
+
+function normalizeExpectedSha(value) {
+  return String(value || '').trim().replace(/^sha256:/i, '').toLowerCase()
+}
+
+function readFrontendUpdateState() {
+  if (!fs.existsSync(path.join(WEB_UPDATE_DIR, 'index.html'))) return null
+  try {
+    const parsed = JSON.parse(fs.readFileSync(path.join(WEB_UPDATE_DIR, WEB_UPDATE_STATE_FILE), 'utf8'))
+    if (parsed && typeof parsed === 'object') return parsed
+  } catch {}
+  try {
+    const version = String(fs.readFileSync(path.join(WEB_UPDATE_DIR, WEB_UPDATE_VERSION_FILE), 'utf8') || '').trim()
+    if (version) return { version }
+  } catch {}
+  return null
+}
+
+function writeFrontendUpdateState(dir, state) {
+  fs.writeFileSync(path.join(dir, WEB_UPDATE_VERSION_FILE), String(state.version || ''))
+  fs.writeFileSync(path.join(dir, WEB_UPDATE_STATE_FILE), JSON.stringify(state, null, 2))
+}
+
+function countFilesRecursive(dir) {
+  if (!fs.existsSync(dir)) return 0
+  let count = 0
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (entry.name === '.' || entry.name === '..') continue
+    const full = path.join(dir, entry.name)
+    if (entry.isDirectory()) count += countFilesRecursive(full)
+    else if (entry.isFile()) count += 1
+  }
+  return count
+}
+
+function removeDirIfExists(dir) {
+  if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true })
+}
+
+function sha256Hex(buffer) {
+  return crypto.createHash('sha256').update(buffer).digest('hex')
+}
+
+async function fetchFrontendManifest() {
+  const resp = await globalThis.fetch(FRONTEND_UPDATE_MANIFEST_URL, {
+    signal: AbortSignal.timeout(10000),
+    headers: { 'User-Agent': 'ClawPanel-Web' },
+  })
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+  const manifest = await resp.json()
+  return manifest && typeof manifest === 'object' ? manifest : {}
+}
+
+function savePanelUpdateStatus(checkAt, result = null, error = null) {
+  const cfg = readPanelConfig()
+  cfg.updates.lastCheckAt = checkAt
+  cfg.updates.lastResult = result
+  cfg.updates.lastError = error || null
+  persistPanelConfig(cfg)
+}
+
+function extractZipWithPython(pythonCmd, extraArgs, zipPath, targetDir) {
+  const script = String.raw`
+import os, sys, json, zipfile
+zip_path = sys.argv[1]
+out_dir = sys.argv[2]
+count = 0
+with zipfile.ZipFile(zip_path) as zf:
+    for info in zf.infolist():
+        name = info.filename.replace('\\', '/')
+        if not name or name.endswith('/'):
+            continue
+        parts = [p for p in name.split('/') if p not in ('', '.')]
+        if any(p == '..' for p in parts):
+            raise SystemExit('压缩包包含非法路径: ' + info.filename)
+        dest = os.path.abspath(os.path.join(out_dir, *parts))
+        base = os.path.abspath(out_dir)
+        if os.path.commonpath([base, dest]) != base:
+            raise SystemExit('压缩包包含非法路径: ' + info.filename)
+    zf.extractall(out_dir)
+    count = sum(1 for info in zf.infolist() if not info.filename.endswith('/'))
+print(json.dumps({'files': count}))
+`
+  const result = spawnSync(pythonCmd, [...extraArgs, '-c', script, zipPath, targetDir], { encoding: 'utf8' })
+  if (result.status !== 0) {
+    throw new Error((result.stderr || result.stdout || `${pythonCmd} 解压失败`).trim())
+  }
+  try {
+    return JSON.parse(result.stdout || '{}').files || countFilesRecursive(targetDir)
+  } catch {
+    return countFilesRecursive(targetDir)
+  }
+}
+
+function extractZipWithPowerShell(zipPath, targetDir) {
+  const script = String.raw`
+$ErrorActionPreference = 'Stop'
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+$zipPath = $args[0]
+$targetDir = $args[1]
+$zip = [System.IO.Compression.ZipFile]::OpenRead($zipPath)
+try {
+  foreach ($entry in $zip.Entries) {
+    $name = $entry.FullName -replace '\\', '/'
+    if ([string]::IsNullOrWhiteSpace($name) -or $name.EndsWith('/')) { continue }
+    $parts = $name.Split('/') | Where-Object { $_ -and $_ -ne '.' }
+    if ($parts -contains '..') { throw "压缩包包含非法路径: $name" }
+  }
+} finally {
+  $zip.Dispose()
+}
+[System.IO.Compression.ZipFile]::ExtractToDirectory($zipPath, $targetDir)
+$files = Get-ChildItem -Path $targetDir -Recurse -File | Measure-Object | Select-Object -ExpandProperty Count
+Write-Output (@{ files = $files } | ConvertTo-Json -Compress)
+`
+  const result = spawnSync('powershell', ['-NoProfile', '-Command', script, zipPath, targetDir], { encoding: 'utf8', windowsHide: true })
+  if (result.status !== 0) {
+    throw new Error((result.stderr || result.stdout || 'PowerShell 解压失败').trim())
+  }
+  try {
+    return JSON.parse(result.stdout || '{}').files || countFilesRecursive(targetDir)
+  } catch {
+    return countFilesRecursive(targetDir)
+  }
+}
+
+function extractFrontendZip(zipPath, targetDir) {
+  if (isWindows) return extractZipWithPowerShell(zipPath, targetDir)
+  try {
+    return extractZipWithPython('python3', [], zipPath, targetDir)
+  } catch (firstErr) {
+    try {
+      return extractZipWithPython('python', [], zipPath, targetDir)
+    } catch {
+      throw firstErr
+    }
+  }
+}
+
+function applyFrontendUpdateArchive(buffer, manifest = null, expectedHash = '') {
+  const expected = normalizeExpectedSha(expectedHash || manifest?.hash)
+  const actualHash = sha256Hex(buffer)
+  if (expected && actualHash !== expected) {
+    throw new Error(`SHA256 校验失败: 期望 ${expected}，实际 ${actualHash}`)
+  }
+
+  const baseDir = path.dirname(WEB_UPDATE_DIR)
+  fs.mkdirSync(baseDir, { recursive: true })
+  removeDirIfExists(WEB_UPDATE_STAGE_DIR)
+  removeDirIfExists(WEB_UPDATE_BACKUP_DIR)
+  fs.mkdirSync(WEB_UPDATE_STAGE_DIR, { recursive: true })
+
+  const tempZipPath = path.join(os.tmpdir(), `clawpanel-web-update-${process.pid}-${Date.now()}.zip`)
+  let fileCount = 0
+  try {
+    fs.writeFileSync(tempZipPath, buffer)
+    fileCount = extractFrontendZip(tempZipPath, WEB_UPDATE_STAGE_DIR)
+    if (!fs.existsSync(path.join(WEB_UPDATE_STAGE_DIR, 'index.html'))) {
+      throw new Error('更新包缺少 index.html')
+    }
+
+    const state = {
+      version: String(manifest?.version || ''),
+      hash: `sha256:${actualHash}`,
+      url: String(manifest?.url || ''),
+      appliedAt: nowIso(),
+      fileCount: fileCount || countFilesRecursive(WEB_UPDATE_STAGE_DIR),
+    }
+    writeFrontendUpdateState(WEB_UPDATE_STAGE_DIR, state)
+
+    if (fs.existsSync(WEB_UPDATE_DIR)) fs.renameSync(WEB_UPDATE_DIR, WEB_UPDATE_BACKUP_DIR)
+    try {
+      fs.renameSync(WEB_UPDATE_STAGE_DIR, WEB_UPDATE_DIR)
+    } catch (err) {
+      if (fs.existsSync(WEB_UPDATE_BACKUP_DIR) && !fs.existsSync(WEB_UPDATE_DIR)) {
+        try { fs.renameSync(WEB_UPDATE_BACKUP_DIR, WEB_UPDATE_DIR) } catch {}
+      }
+      throw err
+    }
+    removeDirIfExists(WEB_UPDATE_BACKUP_DIR)
+
+    return {
+      success: true,
+      files: state.fileCount,
+      path: WEB_UPDATE_DIR,
+      hash: state.hash,
+      version: state.version,
+    }
+  } finally {
+    try { fs.unlinkSync(tempZipPath) } catch {}
+    if (fs.existsSync(WEB_UPDATE_STAGE_DIR)) removeDirIfExists(WEB_UPDATE_STAGE_DIR)
+  }
+}
+
+async function runBackgroundFrontendUpdate() {
+  const checkAt = nowIso()
+  try {
+    const cfg = readPanelConfig()
+    const manifest = await fetchFrontendManifest()
+    const latestVersion = String(manifest.version || '')
+    const minAppVersion = String(manifest.minAppVersion || '')
+    const manifestHash = String(manifest.hash || '')
+    const currentState = readFrontendUpdateState()
+
+    let result
+    if (!latestVersion) {
+      result = { kind: 'frontend', status: 'skipped', reason: 'missing-version', checkedAt: checkAt }
+    } else if (!versionGe(PANEL_VERSION, minAppVersion || '0.0.0')) {
+      result = { kind: 'frontend', status: 'skipped', reason: 'incompatible', checkedAt: checkAt, version: latestVersion, minAppVersion }
+    } else if (!versionGt(latestVersion, PANEL_VERSION)) {
+      result = { kind: 'frontend', status: 'up-to-date', checkedAt: checkAt, version: latestVersion }
+    } else if (fs.existsSync(path.join(WEB_UPDATE_DIR, 'index.html')) && currentState?.version === latestVersion) {
+      result = { kind: 'frontend', status: 'already-downloaded', checkedAt: checkAt, version: latestVersion }
+    } else if (cfg.updates.requireHashForBackground && !normalizeExpectedSha(manifestHash)) {
+      throw new Error('后台自动更新要求 latest.json 提供 hash')
+    } else {
+      const resp = await globalThis.fetch(String(manifest.url || ''), {
+        signal: AbortSignal.timeout(120000),
+        headers: { 'User-Agent': 'ClawPanel-Web Background Updater' },
+      })
+      if (!resp.ok) throw new Error(`下载失败: HTTP ${resp.status}`)
+      const applied = applyFrontendUpdateArchive(Buffer.from(await resp.arrayBuffer()), manifest, manifestHash)
+      result = { kind: 'frontend', status: 'applied', checkedAt: checkAt, version: latestVersion, details: applied }
+    }
+
+    savePanelUpdateStatus(checkAt, result, null)
+    return result
+  } catch (error) {
+    const message = String(error?.message || error || '未知错误')
+    savePanelUpdateStatus(checkAt, { kind: 'frontend', status: 'failed', checkedAt: checkAt }, message)
+    throw error
+  }
+}
+
+function scheduleBackgroundFrontendUpdater() {
+  const cfg = readPanelConfig()
+  const delayMinutes = Math.max(MIN_UPDATE_INTERVAL_MINUTES, Number(cfg?.updates?.intervalMinutes) || DEFAULT_UPDATE_INTERVAL_MINUTES)
+  _frontendUpdaterTimer = setTimeout(async () => {
+    try {
+      const latestCfg = readPanelConfig()
+      if (latestCfg?.updates?.mode === 'background' && latestCfg?.updates?.frontend?.enabled !== false) {
+        await runBackgroundFrontendUpdate()
+      }
+    } catch {}
+    scheduleBackgroundFrontendUpdater()
+  }, delayMinutes * 60 * 1000)
+  if (typeof _frontendUpdaterTimer?.unref === 'function') _frontendUpdaterTimer.unref()
+}
+
+function startBackgroundFrontendUpdater() {
+  if (_frontendUpdaterStarted) return
+  _frontendUpdaterStarted = true
+  ;(async () => {
+    try {
+      const cfg = readPanelConfig()
+      if (cfg?.updates?.mode === 'background' && cfg?.updates?.frontend?.enabled !== false) {
+        await runBackgroundFrontendUpdate()
+      }
+    } catch {}
+    scheduleBackgroundFrontendUpdater()
+  })()
 }
 
 function getAccessPassword() {
@@ -2865,33 +3190,58 @@ const handlers = {
   install_channel_plugin({ packageName, pluginId }) {
     if (!packageName || !pluginId) throw new Error('packageName 和 pluginId 不能为空')
     const bin = findOpenclawBin() || 'openclaw'
+    const normalizedPluginId = pluginId.trim()
+    const normalizedPackageName = packageName.trim()
+    const pluginDir = resolvePluginDir(normalizedPluginId)
+    const hadExistingPlugin = !!(pluginDir && fs.existsSync(pluginDir))
+    const backupRoot = path.join(OPENCLAW_DIR, 'plugin-backups')
+    const backupDir = path.join(backupRoot, `${normalizedPluginId}.__clawpanel_update_backup`)
     let fallbackUsed = false
 
+    if (hadExistingPlugin) {
+      fs.mkdirSync(backupRoot, { recursive: true })
+      if (fs.existsSync(backupDir)) fs.rmSync(backupDir, { recursive: true, force: true })
+      fs.renameSync(pluginDir, backupDir)
+    }
+
     try {
-      execSync(`${bin} plugins install ${packageName.trim()}`, { timeout: 120000, cwd: homedir() })
+      execSync(`${bin} plugins install ${normalizedPackageName}`, { timeout: 120000, cwd: homedir() })
     } catch (e) {
       const errMsg = String(e.message || e.stderr || '')
       // Fallback: if error is about missing openclaw.extensions, install via npm directly
       if (errMsg.includes('openclaw.extensions')) {
         try {
-          fallbackInstallPlugin(packageName.trim(), pluginId.trim())
+          fallbackInstallPlugin(normalizedPackageName, normalizedPluginId)
           fallbackUsed = true
         } catch (fallbackErr) {
-          throw new Error(`插件 ${pluginId} 安装失败: ${errMsg}\n备用安装也失败: ${fallbackErr.message}`)
+          throw new Error(`插件 ${normalizedPluginId} 安装失败: ${errMsg}\n备用安装也失败: ${fallbackErr.message}`)
         }
       } else {
-        throw new Error(`插件 ${pluginId} 安装失败: ` + (e.message || e))
+        throw new Error(`插件 ${normalizedPluginId} 安装失败: ` + (e.message || e))
       }
     }
 
-    postInstallChannelPlugin(pluginId.trim())
+    try {
+      postInstallChannelPlugin(normalizedPluginId)
 
-    // 验证安装结果
-    const pluginDir = resolvePluginDir(pluginId.trim())
-    const installed = isPluginInstalledOnDisk(pluginId.trim())
-    if (!installed) {
-      throw new Error(`插件 ${pluginId} 安装命令已执行但未检测到插件文件，可能安装未成功。`)
+      // 验证安装结果
+      const installed = isPluginInstalledOnDisk(normalizedPluginId)
+      if (!installed) {
+        throw new Error(`插件 ${normalizedPluginId} 安装命令已执行但未检测到插件文件，可能安装未成功。`)
+      }
+    } catch (e) {
+      if (hadExistingPlugin && fs.existsSync(backupDir)) {
+        try {
+          if (pluginDir && fs.existsSync(pluginDir)) fs.rmSync(pluginDir, { recursive: true, force: true })
+          fs.renameSync(backupDir, pluginDir)
+        } catch (rollbackErr) {
+          throw new Error(`${e.message || e}；回滚失败: ${rollbackErr.message || rollbackErr}`)
+        }
+      }
+      throw e
     }
+
+    if (hadExistingPlugin && fs.existsSync(backupDir)) fs.rmSync(backupDir, { recursive: true, force: true })
     _serverCache.delete('plugins_list_output')
     return fallbackUsed ? '安装成功（备用方式）' : '安装成功'
   },
@@ -5035,9 +5385,7 @@ const handlers = {
   },
 
   write_panel_config({ config }) {
-    if (!fs.existsSync(OPENCLAW_DIR)) fs.mkdirSync(OPENCLAW_DIR, { recursive: true })
-    fs.writeFileSync(PANEL_CONFIG_PATH, JSON.stringify(config, null, 2))
-    invalidateConfigCache()
+    persistPanelConfig(config)
     return true
   },
 
@@ -5147,9 +5495,7 @@ const handlers = {
   save_custom_node_path({ nodeDir }) {
     const cfg = readPanelConfig()
     cfg.customNodePath = nodeDir
-    if (!fs.existsSync(OPENCLAW_DIR)) fs.mkdirSync(OPENCLAW_DIR, { recursive: true })
-    fs.writeFileSync(PANEL_CONFIG_PATH, JSON.stringify(cfg, null, 2))
-    invalidateConfigCache()
+    persistPanelConfig(cfg)
     return true
   },
 
@@ -5163,42 +5509,81 @@ const handlers = {
   auth_set_password({ password }) {
     const cfg = readPanelConfig()
     cfg.accessPassword = password || ''
-    fs.writeFileSync(PANEL_CONFIG_PATH, JSON.stringify(cfg, null, 2))
-    // 清除所有 session（密码变更后强制重新登录）
-    _sessions.clear()
+    persistPanelConfig(cfg)
     return true
   },
 
   check_panel_update() { return { latest: null, url: 'https://github.com/cangerx/clawpanel/releases' } },
 
-  // 前端热更新
   async check_frontend_update() {
-    const pkgPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'package.json')
-    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'))
-    const currentVersion = pkg.version
+    const currentVersion = PANEL_VERSION
+    const appliedState = readFrontendUpdateState()
+    const updateReady = fs.existsSync(path.join(WEB_UPDATE_DIR, 'index.html'))
 
     try {
-      const resp = await globalThis.fetch('https://claw.qt.cool/update/latest.json', {
-        signal: AbortSignal.timeout(8000),
-        headers: { 'User-Agent': 'ClawPanel-Web' },
-      })
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
-      const manifest = await resp.json()
-      const latestVersion = manifest.version || ''
-      const minAppVersion = manifest.minAppVersion || '0.0.0'
+      const manifest = await fetchFrontendManifest()
+      const latestVersion = String(manifest.version || '')
+      const minAppVersion = String(manifest.minAppVersion || '0.0.0')
       const compatible = versionGe(currentVersion, minAppVersion)
-      const hasUpdate = !!latestVersion && latestVersion !== currentVersion && compatible && versionGt(latestVersion, currentVersion)
-      return { currentVersion, latestVersion, hasUpdate, compatible, updateReady: false, manifest }
+      const hasUpdate = !!latestVersion
+        && compatible
+        && versionGt(latestVersion, currentVersion)
+        && !(updateReady && appliedState?.version === latestVersion)
+      return {
+        currentVersion,
+        latestVersion,
+        hasUpdate,
+        compatible,
+        updateReady: updateReady && appliedState?.version === latestVersion,
+        updateVersion: appliedState?.version || '',
+        manifest,
+      }
     } catch {
-      return { currentVersion, latestVersion: currentVersion, hasUpdate: false, compatible: true, updateReady: false, manifest: { version: currentVersion } }
+      return {
+        currentVersion,
+        latestVersion: currentVersion,
+        hasUpdate: false,
+        compatible: true,
+        updateReady,
+        updateVersion: appliedState?.version || '',
+        manifest: { version: currentVersion },
+      }
     }
   },
-  download_frontend_update() { return { success: true, files: 12, path: path.join(OPENCLAW_DIR, 'clawpanel', 'web-update') } },
-  rollback_frontend_update() { return { success: true } },
+  async download_frontend_update({ url = '', expectedHash = '' } = {}) {
+    const manifest = await fetchFrontendManifest().catch(() => null)
+    const downloadUrl = String(url || manifest?.url || '').trim()
+    if (!downloadUrl) throw new Error('缺少更新包下载地址')
+    const resp = await globalThis.fetch(downloadUrl, {
+      signal: AbortSignal.timeout(120000),
+      headers: { 'User-Agent': 'ClawPanel-Web' },
+    })
+    if (!resp.ok) throw new Error(`下载失败: HTTP ${resp.status}`)
+    return applyFrontendUpdateArchive(
+      Buffer.from(await resp.arrayBuffer()),
+      manifest && manifest.url === downloadUrl ? manifest : null,
+      expectedHash || manifest?.hash || ''
+    )
+  },
+  rollback_frontend_update() {
+    removeDirIfExists(WEB_UPDATE_DIR)
+    removeDirIfExists(WEB_UPDATE_STAGE_DIR)
+    removeDirIfExists(WEB_UPDATE_BACKUP_DIR)
+    return { success: true }
+  },
   get_update_status() {
-    const pkgPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'package.json')
-    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'))
-    return { currentVersion: pkg.version, updateReady: false, updateVersion: '', updateDir: path.join(OPENCLAW_DIR, 'clawpanel', 'web-update') }
+    const state = readFrontendUpdateState()
+    const cfg = readPanelConfig()
+    return {
+      currentVersion: PANEL_VERSION,
+      updateReady: fs.existsSync(path.join(WEB_UPDATE_DIR, 'index.html')),
+      updateVersion: state?.version || '',
+      updateState: state,
+      updateDir: WEB_UPDATE_DIR,
+      lastCheckAt: cfg?.updates?.lastCheckAt ?? null,
+      lastResult: cfg?.updates?.lastResult ?? null,
+      lastError: cfg?.updates?.lastError ?? null,
+    }
   },
   write_env_file({ path: p, config }) {
     const expanded = p.startsWith('~/') ? path.join(homedir(), p.slice(2)) : p
@@ -5218,9 +5603,7 @@ function _initApi() {
   if (!cfg.accessPassword && !cfg.ignoreRisk) {
     cfg.accessPassword = '123456'
     cfg.mustChangePassword = true
-    if (!fs.existsSync(OPENCLAW_DIR)) fs.mkdirSync(OPENCLAW_DIR, { recursive: true })
-    fs.writeFileSync(PANEL_CONFIG_PATH, JSON.stringify(cfg, null, 2))
-    invalidateConfigCache()
+    persistPanelConfig(cfg)
     console.log('[api] ⚠️  首次启动，默认访问密码: 123456')
     console.log('[api] ⚠️  首次登录后将强制要求修改密码')
   }
@@ -5228,6 +5611,8 @@ function _initApi() {
   console.log('[api] API 已启动，配置目录:', OPENCLAW_DIR)
   console.log('[api] 平台:', isMac ? 'macOS' : process.platform)
   console.log('[api] 访问密码:', pw ? '已设置' : (cfg.ignoreRisk ? '无视风险模式（无密码）' : '未设置'))
+
+  startBackgroundFrontendUpdater()
 
   // 定时清理过期 session 和登录限速记录（每 10 分钟）
   setInterval(() => {
@@ -5336,8 +5721,7 @@ async function _apiMiddleware(req, res, next) {
     cfg.accessPassword = args.newPassword
     delete cfg.mustChangePassword
     delete cfg.ignoreRisk
-    fs.writeFileSync(PANEL_CONFIG_PATH, JSON.stringify(cfg, null, 2))
-    invalidateConfigCache()
+    persistPanelConfig(cfg)
     _sessions.clear()
     const token = crypto.randomUUID()
     _sessions.set(token, { expires: Date.now() + SESSION_TTL })
@@ -5408,8 +5792,7 @@ async function _apiMiddleware(req, res, next) {
     } else {
       delete cfg.ignoreRisk
     }
-    fs.writeFileSync(PANEL_CONFIG_PATH, JSON.stringify(cfg, null, 2))
-    invalidateConfigCache()
+    persistPanelConfig(cfg)
     res.setHeader('Content-Type', 'application/json')
     res.end(JSON.stringify({ success: true }))
     return
