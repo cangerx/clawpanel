@@ -308,7 +308,7 @@ OpenClaw 的 Agent 有一套完整的**身份系统**，由工作区引导文件
 ```
 
 **"借尸还魂"不是复用知识库，而是完整接管 Agent 的灵魂**——
-ClawPanel 的 AI 助手直接读取这些文件，像 OpenClaw 一样把它们注入 system prompt，
+Cpanl 的 AI 助手直接读取这些文件，像 OpenClaw 一样把它们注入 system prompt，
 从而变成那个 Agent：有他的名字、他的性格、他的记忆、他认识的用户。
 
 ### 4A：灵魂移植（Agent Identity Takeover）
@@ -319,7 +319,7 @@ ClawPanel 的 AI 助手直接读取这些文件，像 OpenClaw 一样把它们�
 2. **发现** 所有可用的 Agent 身份（main、test 等）
 3. **用户选择** 要附身的 Agent
 4. **读取** 该 Agent 的全部引导文件：
-   - `SOUL.md` → 注入为人设（替换 ClawPanel 助手的默认人设）
+   - `SOUL.md` → 注入为人设（替换 Cpanl 助手的默认人设）
    - `IDENTITY.md` → 提取名称/表情/风格（替换助手名称和性格描述）
    - `USER.md` → 注入用户上下文（知道用户叫什么、偏好什么）
    - `AGENTS.md` → 注入操作规则（Agent 的行为准则）
@@ -332,7 +332,7 @@ ClawPanel 的 AI 助手直接读取这些文件，像 OpenClaw 一样把它们�
 
 ```js
 // 新增配置项
-_config.soulSource = null  // null = 使用 ClawPanel 默认 | 'openclaw:main' | 'openclaw:test' | 'custom'
+_config.soulSource = null  // null = 使用 Cpanl 默认 | 'openclaw:main' | 'openclaw:test' | 'custom'
 _config.soulCache = null   // 缓存读取的灵魂文件内容
 
 // buildSystemPrompt 改造
@@ -341,7 +341,7 @@ function buildSystemPrompt() {
     // 借尸还魂模式：使用 OpenClaw Agent 的灵魂
     return buildOpenClawSoulPrompt()
   }
-  // 默认模式：使用 ClawPanel 自带的系统提示词
+  // 默认模式：使用 Cpanl 自带的系统提示词
   return buildDefaultPrompt()
 }
 
@@ -389,7 +389,7 @@ function buildOpenClawSoulPrompt() {
     }
   }
 
-  // 8. 追加 ClawPanel 特有的工具说明（保持工具能力）
+  // 8. 追加 Cpanl 特有的工具说明（保持工具能力）
   prompt += buildToolInstructions()
 
   return prompt
@@ -442,7 +442,7 @@ async function loadOpenClawSoul(agentId = 'main') {
 │                                             │
 │  身份来源                                   │
 │  ┌──────────────────────────────────────────│
-│  │ ● ClawPanel 默认人设                     │ ← 当前默认
+│  │ ● Cpanl 默认人设                     │ ← 当前默认
 │  │ ○ OpenClaw Agent 身份（借尸还魂）        │ ← 新增
 │  │ ○ 自定义人设                             │
 │  └──────────────────────────────────────────│
@@ -467,7 +467,7 @@ async function loadOpenClawSoul(agentId = 'main') {
 │  ⚠️ 附身后，助手将使用该 Agent 的人格、    │
 │  记忆和用户偏好。可随时切回默认。           │
 │                                             │
-│  ─── 当选择「ClawPanel 默认」时显示 ────    │
+│  ─── 当选择「Cpanl 默认」时显示 ────    │
 │                                             │
 │  助手名称: [晴辰助手          ]             │
 │  助手性格: [________________________]       │
@@ -482,14 +482,14 @@ async function loadOpenClawSoul(agentId = 'main') {
 | 名称 | "晴辰助手" | IDENTITY.md 中的名称 |
 | 性格 | 简洁专业 | SOUL.md 定义的风格 |
 | 称呼用户 | "你" | USER.md 中的称呼（如"爸爸"） |
-| 行为规则 | ClawPanel 内置 | AGENTS.md 的规则体系 |
+| 行为规则 | Cpanl 内置 | AGENTS.md 的规则体系 |
 | 记忆 | 无 | MEMORY.md + 每日记忆 |
-| 工具知识 | ClawPanel 内置 | TOOLS.md 的本地笔记 |
-| 工具能力 | 保持不变 | 保持 ClawPanel 的工具 |
+| 工具知识 | Cpanl 内置 | TOOLS.md 的本地笔记 |
+| 工具能力 | 保持不变 | 保持 Cpanl 的工具 |
 
-**关键设计**：附身只替换"灵魂"（system prompt），**工具能力保持 ClawPanel 的**。
-因为 OpenClaw 的工具（exec/read/edit/write）和 ClawPanel 的工具本质相同，
-但 ClawPanel 有独有的 docker/ssh/搜索等扩展工具，这些要保留。
+**关键设计**：附身只替换"灵魂"（system prompt），**工具能力保持 Cpanl 的**。
+因为 OpenClaw 的工具（exec/read/edit/write）和 Cpanl 的工具本质相同，
+但 Cpanl 有独有的 docker/ssh/搜索等扩展工具，这些要保留。
 
 ### 4B：自定义知识库
 
@@ -528,7 +528,7 @@ async function loadOpenClawSoul(agentId = 'main') {
 
 ### 场景
 - 用户已安装 OpenClaw 并配置了模型
-- ClawPanel AI 助手需要单独配置模型（目前手动填写）
+- Cpanl AI 助手需要单独配置模型（目前手动填写）
 - 一键从 OpenClaw 配置导入，省去重复配置
 
 ### 实现
@@ -568,7 +568,7 @@ async function loadOpenClawSoul(agentId = 'main') {
 ```
 
 **推荐优先读取 Agent 的 models.json**——它有完整的 baseUrl + apiKey + models 列表，
-一键就能填充 ClawPanel 助手的配置。
+一键就能填充 Cpanl 助手的配置。
 
 #### 读取逻辑
 ```js
@@ -731,7 +731,7 @@ dev-api.js: 已有 read_config handler
 
 | 组件 | 预算 | 说明 |
 |------|------|------|
-| ClawPanel 基础 prompt | ~2000 tokens | 产品介绍、工具指南、技能卡片 |
+| Cpanl 基础 prompt | ~2000 tokens | 产品介绍、工具指南、技能卡片 |
 | SOUL.md | ~500 tokens | 人设通常简短 |
 | IDENTITY.md | ~200 tokens | 名称/风格 |
 | USER.md | ~200 tokens | 用户档案 |

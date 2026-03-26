@@ -1,4 +1,4 @@
-# ClawPanel Docker 多实例管理 — 技术规划
+# Cpanl Docker 多实例管理 — 技术规划
 
 > 版本: v1.0 | 日期: 2026-03-08
 
@@ -6,10 +6,10 @@
 
 ### 1.1 现状
 
-ClawPanel 当前架构是 **单实例管理**：
+Cpanl 当前架构是 **单实例管理**：
 
 ```
-浏览器 → ClawPanel 前端
+浏览器 → Cpanl 前端
               │
               ├── /__api/* → dev-api.js → 读写本机 ~/.openclaw/ 文件
               ├── /ws     → 代理到本机 Gateway:18789 (WebSocket)
@@ -44,7 +44,7 @@ Docker 页面能管容器的"壳"，但 **无法管理容器里的 OpenClaw**：
 
 ```
 ┌──────────────────────────────────────────────────┐
-│                  ClawPanel 前端                   │
+│                  Cpanl 前端                   │
 │  ┌────────────────────────────────────────────┐  │
 │  │  实例切换器: [ ● 本机 ▼ ]                    │  │
 │  │              [ ○ prod-server (Docker) ]     │  │
@@ -74,7 +74,7 @@ Docker 页面能管容器的"壳"，但 **无法管理容器里的 OpenClaw**：
            /__api/*     /__api/*
 ```
 
-**关键点：每个 Docker 容器运行 full 镜像，内含完整的 ClawPanel (serve.js) + Gateway。**
+**关键点：每个 Docker 容器运行 full 镜像，内含完整的 Cpanl (serve.js) + Gateway。**
 因此每个容器已经有自己的 `/__api/*` 端点，我们只需要代理请求过去。
 
 ### 2.2 WebSocket 连接
@@ -470,9 +470,9 @@ server.on('upgrade', (req, socket, head) => {
 - **不做** 复杂的权限角色系统
 
 ### 7.2 前提条件
-- 远程实例必须运行 ClawPanel（serve.js），版本 >= 0.7.0
+- 远程实例必须运行 Cpanl（serve.js），版本 >= 0.7.0
 - Docker 实例使用 full 镜像（含 Panel + Gateway）
-- 网络可达（ClawPanel 后端能访问远程实例的端口）
+- 网络可达（Cpanl 后端能访问远程实例的端口）
 
 ### 7.3 兼容性
 - 现有单实例用户 **零影响**：默认 activeId 为 "local"，行为完全不变

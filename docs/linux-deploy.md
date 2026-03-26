@@ -1,10 +1,10 @@
-# ClawPanel Linux 部署指南
+# Cpanl Linux 部署指南
 
-本文介绍如何在 Linux 服务器上部署 **ClawPanel Web 版**，通过浏览器远程管理 OpenClaw。
+本文介绍如何在 Linux 服务器上部署 **Cpanl Web 版**，通过浏览器远程管理 OpenClaw。
 
 适用场景：云服务器、NAS、家庭 HomeLab、无 GUI 的 Linux 主机。
 
-> **ClawPanel** 提供 Windows / macOS / Linux 桌面安装包；本文聚焦 Linux 服务器上的 Web 部署方式，通过构建后的前端 + `scripts/serve.js` 运行，适合无桌面环境的常驻部署。
+> **Cpanl** 提供 Windows / macOS / Linux 桌面安装包；本文聚焦 Linux 服务器上的 Web 部署方式，通过构建后的前端 + `scripts/serve.js` 运行，适合无桌面环境的常驻部署。
 
 ---
 
@@ -29,7 +29,7 @@
 | Node.js | 18+ | 推荐 22 LTS |
 | npm | 随 Node.js | 包管理器 |
 | Git | 可选 | 仅在源码包下载失败时作为回退 clone 使用 |
-| OpenClaw | 最新 | ClawPanel 管理的对象 |
+| OpenClaw | 最新 | Cpanl 管理的对象 |
 
 ---
 
@@ -126,7 +126,7 @@ npm -v
 
 ### 2. 安装 OpenClaw
 
-ClawPanel 是 OpenClaw 的管理工具，需要先安装 OpenClaw：
+Cpanl 是 OpenClaw 的管理工具，需要先安装 OpenClaw：
 
 ```bash
 npm install -g @qingchencloud/openclaw-zh --registry https://registry.npmmirror.com
@@ -138,7 +138,7 @@ npm install -g @qingchencloud/openclaw-zh --registry https://registry.npmmirror.
 openclaw init
 ```
 
-### 3. 获取并安装 ClawPanel
+### 3. 获取并安装 Cpanl
 
 ```bash
 git clone https://github.com/cangerx/clawpanel.git
@@ -261,7 +261,7 @@ cd /path/to/clawpanel && npm run serve -- --host 0.0.0.0 --port 1420
 
 ## Nginx 反向代理
 
-如果希望用域名 + HTTPS 访问 ClawPanel：
+如果希望用域名 + HTTPS 访问 Cpanl：
 
 ```nginx
 server {
@@ -281,7 +281,7 @@ server {
 }
 ```
 
-> **重要：** 必须配置 WebSocket 升级（`Upgrade` + `Connection`），否则 ClawPanel 无法连接 Gateway。
+> **重要：** 必须配置 WebSocket 升级（`Upgrade` + `Connection`），否则 Cpanl 无法连接 Gateway。
 
 配合 Let's Encrypt 启用 HTTPS：
 
@@ -312,7 +312,7 @@ sudo firewall-cmd --reload
 
 ## 更新升级
 
-### 更新 ClawPanel
+### 更新 Cpanl
 
 推荐直接重新执行统一安装脚本：
 
@@ -334,7 +334,7 @@ systemctl restart clawpanel    # 或 systemctl --user restart clawpanel
 
 ### 更新 OpenClaw
 
-**方式一：在 ClawPanel 面板中操作**（推荐）
+**方式一：在 Cpanl 面板中操作**（推荐）
 
 打开「关于」页面 → 点击版本管理，优先切换到当前面板绑定的推荐稳定版。面板会自动处理 sudo 权限、镜像源与 Git HTTPS 兼容。
 
@@ -371,7 +371,7 @@ CLAWPANEL_PORT=3000 curl -fsSL https://raw.githubusercontent.com/cangerx/clawpan
 
 ### Q: 无法使用 `systemctl --user`？
 
-通常是当前会话没有可用的 user bus，或者主机策略禁止 linger。脚本会自动回退到 `nohup`，你仍然可以继续使用 ClawPanel。
+通常是当前会话没有可用的 user bus，或者主机策略禁止 linger。脚本会自动回退到 `nohup`，你仍然可以继续使用 Cpanl。
 
 ### Q: 打开面板显示 `openclaw.json` 不存在？
 
@@ -387,7 +387,7 @@ openclaw init
 确保：
 
 - `openclaw` 命令在 PATH 中
-- 运行 ClawPanel 的用户有权限操作进程
+- 运行 Cpanl 的用户有权限操作进程
 
 ```bash
 which openclaw
@@ -400,11 +400,11 @@ openclaw --version
 2. 检查云服务器安全组是否已开放端口
 3. 生产环境建议使用 Nginx 反向代理 + HTTPS
 
-### Q: 如何同时启动 Gateway 和 ClawPanel？
+### Q: 如何同时启动 Gateway 和 Cpanl？
 
 它们是独立进程：
 
-- ClawPanel 由统一安装脚本自动常驻
+- Cpanl 由统一安装脚本自动常驻
 - Gateway 仍需你自己启动，或在面板里点击启动按钮管理
 
 例如：

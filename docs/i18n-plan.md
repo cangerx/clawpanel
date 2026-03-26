@@ -1,6 +1,6 @@
-# ClawPanel i18n 国际化方案
+# Cpanl i18n 国际化方案
 
-> 本文档是 ClawPanel 多语言国际化的完整技术方案和实施指南。
+> 本文档是 Cpanl 多语言国际化的完整技术方案和实施指南。
 > 任何后续会话开始 i18n 工作时，请先阅读本文档。
 
 ## 一、现状评估
@@ -248,7 +248,7 @@ toast(t('common.savedSuccessfully'), 'success')
 ### 技术品牌词不翻译
 以下词保持原样，不翻译：
 - `OpenClaw`
-- `ClawPanel`
+- `Cpanl`
 - `Gateway`
 - `Agent`（Agent 管理不翻译为"代理"）
 - `MCP`

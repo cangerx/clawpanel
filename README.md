@@ -1,6 +1,6 @@
 
 
-# ClawPanel
+# Cpanl
 
 <p align="center">
   <img src="public/images/logo-brand.png" width="360" alt="Cpanel">

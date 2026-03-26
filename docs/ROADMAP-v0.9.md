@@ -1,4 +1,4 @@
-# ClawPanel v0.9.0 规划
+# Cpanl v0.9.0 规划
 
 ## 命令执行权限管理 (Issue #55)
 
