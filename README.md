@@ -117,7 +117,19 @@ curl -fsSL https://gitee.com/cangerx/clawpanel/raw/main/deploy.sh | bash
 
 ### Docker
 
-如果你已经有 Docker / Compose 环境，详见 [Docker 部署指南](docs/docker-deploy.md)。
+如果你已经有 Docker / Compose 环境，可以先用一条命令快速启动：
+
+```bash
+docker run -d \
+  --name clawpanel \
+  --restart unless-stopped \
+  -p 1420:1420 \
+  -v clawpanel-data:/root/.openclaw \
+  node:22-slim \
+  sh -c "apt-get update && apt-get install -y git && npm install -g @qingchencloud/openclaw-zh --registry https://registry.npmmirror.com && openclaw init 2>/dev/null || true && git clone https://github.com/cangerx/clawpanel.git /app && cd /app && npm install && npm run build && npm run serve"
+```
+
+访问 `http://服务器IP:1420`。生产环境建议使用 Compose，详见 [Docker 部署指南](docs/docker-deploy.md)。
 
 ## 功能特性
 
