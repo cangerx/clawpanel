@@ -19,6 +19,7 @@ PORT="${CLAWPANEL_PORT:-1420}"
 HOST="${CLAWPANEL_HOST:-0.0.0.0}"
 DOWNLOAD_TIMEOUT="${CLAWPANEL_DOWNLOAD_TIMEOUT:-600}"
 SOURCE_PREFERENCE_RAW="${CLAWPANEL_SOURCE:-auto}"
+SOURCE_PROBE_TIMEOUT="${CLAWPANEL_SOURCE_PROBE_TIMEOUT:-8}"
 INSTALLER_VERSION="v4"
 
 UNAME_S="$(uname -s 2>/dev/null || printf 'unknown')"
@@ -339,6 +340,9 @@ normalize_source_preference() {
     github|gitee)
       SOURCE_PREFERENCE="$requested"
       ;;
+    ask|prompt|select)
+      SOURCE_PREFERENCE='auto'
+      ;;
     cn|china|domestic)
       SOURCE_PREFERENCE='gitee'
       ;;
@@ -363,7 +367,154 @@ normalize_source_preference() {
   fi
 }
 
+ensure_source_labels() {
+  SOURCE_PREFERENCE="${SOURCE_PREFERENCE:-github}"
+  SOURCE_PRIMARY_LABEL="${SOURCE_PRIMARY_LABEL:-GitHub}"
+  SOURCE_SECONDARY_LABEL="${SOURCE_SECONDARY_LABEL:-Gitee}"
+
+  case "$SOURCE_PREFERENCE" in
+    gitee)
+      SOURCE_PRIMARY_LABEL='Gitee'
+      SOURCE_SECONDARY_LABEL='GitHub'
+      ;;
+    github)
+      SOURCE_PRIMARY_LABEL='GitHub'
+      SOURCE_SECONDARY_LABEL='Gitee'
+      ;;
+  esac
+}
+
+source_probe_urls() {
+  local github_url gitee_url
+  if [ "$REF" = "main" ]; then
+    github_url="$GITHUB_ARCHIVE_BASE/heads/main.tar.gz"
+    gitee_url="$GITEE_ARCHIVE_BASE?ref=main&format=tgz"
+  else
+    github_url="$GITHUB_ARCHIVE_BASE/tags/$REF.tar.gz"
+    gitee_url="$GITEE_ARCHIVE_BASE?ref=$REF&format=tgz"
+  fi
+  printf '%s\n%s\n' "$github_url" "$gitee_url"
+}
+
+probe_url_ms() {
+  local url="$1"
+  local timeout="${2:-8}"
+  local result code sec ms
+
+  if require_cmd curl; then
+    result=$(curl --silent --show-error --location \
+      --connect-timeout 3 --max-time "$timeout" \
+      --output /dev/null --write-out '%{http_code} %{time_total}' "$url" 2>/dev/null || true)
+    code=$(printf '%s' "$result" | awk '{print $1}')
+    sec=$(printf '%s' "$result" | awk '{print $2}')
+    case "$code" in
+      2*|3*)
+        ms=$(awk -v s="$sec" 'BEGIN { printf("%d", s * 1000) }')
+        [ -n "$ms" ] || ms=999999
+        printf '%s' "$ms"
+        return 0
+        ;;
+    esac
+  elif require_cmd wget; then
+    # wget 下无法稳定拿到时间细节，仅探测可达性
+    if wget -q --spider --timeout="$timeout" "$url" >/dev/null 2>&1; then
+      printf '500'
+      return 0
+    fi
+  fi
+
+  printf '999999'
+}
+
+auto_pick_fastest_source() {
+  local urls gh_url ge_url gh_ms ge_ms best
+  urls="$(source_probe_urls)"
+  gh_url="$(printf '%s' "$urls" | sed -n '1p')"
+  ge_url="$(printf '%s' "$urls" | sed -n '2p')"
+
+  gh_ms="$(probe_url_ms "$gh_url" "$SOURCE_PROBE_TIMEOUT")"
+  ge_ms="$(probe_url_ms "$ge_url" "$SOURCE_PROBE_TIMEOUT")"
+
+  if [ "$gh_ms" -ge 999999 ] && [ "$ge_ms" -ge 999999 ]; then
+    ensure_source_labels
+    log_warn "自动测速失败（GitHub/Gitee 均不可达），回退到默认偏好: ${SOURCE_PRIMARY_LABEL:-GitHub}"
+    return 0
+  fi
+
+  if [ "$gh_ms" -le "$ge_ms" ]; then
+    best='github'
+  else
+    best='gitee'
+  fi
+
+  SOURCE_PREFERENCE="$best"
+  if [ "$SOURCE_PREFERENCE" = "gitee" ]; then
+    SOURCE_PRIMARY_LABEL='Gitee'
+    SOURCE_SECONDARY_LABEL='GitHub'
+  else
+    SOURCE_PRIMARY_LABEL='GitHub'
+    SOURCE_SECONDARY_LABEL='Gitee'
+  fi
+
+  ensure_source_labels
+  log_info "自动测速结果: GitHub=${gh_ms}ms, Gitee=${ge_ms}ms，已选择 ${SOURCE_PRIMARY_LABEL:-GitHub}"
+}
+
+prompt_source_choice_if_needed() {
+  local requested choice
+  requested="$(printf '%s' "$SOURCE_PREFERENCE_RAW" | tr '[:upper:]' '[:lower:]')"
+
+  [ -t 0 ] || return 0
+  [ -t 1 ] || return 0
+
+  case "$requested" in
+    auto|ask|prompt|select|'')
+      ;;
+    *)
+      return 0
+      ;;
+  esac
+
+  printf "\n"
+  printf "%b[下载源选择]%b 请选择源码下载渠道：\n" "$C_CYAN$C_BOLD" "$C_RESET"
+  printf "  %b1)%b 自动测速（推荐，按当前机器网络选择最快）\n" "$C_GREEN" "$C_RESET"
+  printf "  %b2)%b GitHub\n" "$C_GREEN" "$C_RESET"
+  printf "  %b3)%b Gitee\n" "$C_GREEN" "$C_RESET"
+  printf "  直接回车默认：1\n"
+  printf "  选择 [1-3]: "
+  IFS= read -r choice || true
+
+  case "$choice" in
+    ''|1)
+      SOURCE_PREFERENCE='auto'
+      ;;
+    2)
+      SOURCE_PREFERENCE='github'
+      SOURCE_PRIMARY_LABEL='GitHub'
+      SOURCE_SECONDARY_LABEL='Gitee'
+      ;;
+    3)
+      SOURCE_PREFERENCE='gitee'
+      SOURCE_PRIMARY_LABEL='Gitee'
+      SOURCE_SECONDARY_LABEL='GitHub'
+      ;;
+    *)
+      log_warn "无效选择，已使用自动测速"
+      SOURCE_PREFERENCE='auto'
+      ;;
+  esac
+}
+
+finalize_source_preference() {
+  prompt_source_choice_if_needed
+  if [ "$SOURCE_PREFERENCE" = "auto" ]; then
+    auto_pick_fastest_source
+  fi
+  ensure_source_labels
+}
+
 resolve_target() {
+  ensure_source_labels
   if [ "$REF" = "main" ]; then
     if [ "$SOURCE_PREFERENCE" = "gitee" ]; then
       DOWNLOAD_URL="$GITEE_ARCHIVE_BASE?ref=main&format=tgz"
@@ -387,7 +538,12 @@ resolve_target() {
   log_info "安装目标: $VERSION_LABEL"
   log_info "安装目录: $INSTALL_DIR"
   log_info "监听地址: $HOST:$PORT"
-  log_info "源码渠道: 优先 $SOURCE_PRIMARY_LABEL，失败回退 $SOURCE_SECONDARY_LABEL"
+  log_info "源码渠道: 优先 ${SOURCE_PRIMARY_LABEL:-GitHub}，失败回退 ${SOURCE_SECONDARY_LABEL:-Gitee}"
+  if [ "$(printf '%s' "$SOURCE_PREFERENCE_RAW" | tr '[:upper:]' '[:lower:]')" = "auto" ] || [ "$SOURCE_PREFERENCE" = "auto" ]; then
+    log_info "来源策略: 自动测速择优"
+  else
+    log_info "来源策略: 手动/环境变量指定"
+  fi
 }
 
 download_archive() {
@@ -418,23 +574,24 @@ download_archive() {
 fetch_source() {
   local tmp_file="$1"
   local tmp_extract="$2"
+  ensure_source_labels
 
   if download_archive "$DOWNLOAD_URL" "$tmp_file"; then
     [ -s "$tmp_file" ] || return 1
     mkdir -p "$tmp_extract"
     tar xzf "$tmp_file" -C "$tmp_extract" --strip-components=1
-    log_ok "源码包下载并解压完成（$SOURCE_PRIMARY_LABEL）"
+    log_ok "源码包下载并解压完成（${SOURCE_PRIMARY_LABEL:-GitHub}）"
     return 0
   fi
 
   if [ -n "$DOWNLOAD_URL_ALT" ]; then
-    log_warn "$SOURCE_PRIMARY_LABEL 源码包下载失败，尝试使用 $SOURCE_SECONDARY_LABEL 镜像"
+    log_warn "${SOURCE_PRIMARY_LABEL:-GitHub} 源码包下载失败，尝试使用 ${SOURCE_SECONDARY_LABEL:-Gitee} 镜像"
     rm -f "$tmp_file"
     if download_archive "$DOWNLOAD_URL_ALT" "$tmp_file"; then
       [ -s "$tmp_file" ] || return 1
       mkdir -p "$tmp_extract"
       tar xzf "$tmp_file" -C "$tmp_extract" --strip-components=1
-      log_ok "源码包下载并解压完成（$SOURCE_SECONDARY_LABEL）"
+      log_ok "源码包下载并解压完成（${SOURCE_SECONDARY_LABEL:-Gitee}）"
       return 0
     fi
   fi
@@ -811,7 +968,9 @@ main() {
 
   log_step "检查运行环境"
   validate_runtime_inputs
+  ensure_source_labels
   normalize_source_preference
+  finalize_source_preference
   require_cmd node || { log_error "需要 Node.js 18+，请先安装: https://nodejs.org/"; exit 1; }
   require_cmd npm || { log_error "需要 npm，请先安装 Node.js/npm"; exit 1; }
   require_cmd tar || { log_error "需要 tar 命令用于解压源码包"; exit 1; }
