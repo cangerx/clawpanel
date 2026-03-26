@@ -545,7 +545,8 @@ fn read_applied_update_state() -> Option<AppliedUpdateState> {
 fn write_update_state_files(dir: &Path, state: &AppliedUpdateState) -> Result<(), String> {
     fs::write(update_version_path(dir), state.version.as_bytes())
         .map_err(|e| format!("写入版本文件失败: {e}"))?;
-    let state_json = serde_json::to_string_pretty(state).map_err(|e| format!("序列化状态失败: {e}"))?;
+    let state_json =
+        serde_json::to_string_pretty(state).map_err(|e| format!("序列化状态失败: {e}"))?;
     fs::write(update_state_path(dir), state_json).map_err(|e| format!("写入状态文件失败: {e}"))
 }
 
