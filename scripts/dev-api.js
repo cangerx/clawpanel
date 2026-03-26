@@ -999,6 +999,37 @@ function runCliJsonCommand(command, options = {}) {
   return extractCliJson(combined)
 }
 
+function runDoctorCommand({ fix = false, timeoutMs = 20000 } = {}) {
+  const bin = findOpenclawBin()
+  if (!bin) throw new Error('OpenClaw CLI 未找到，请先安装')
+
+  const args = fix ? ['doctor', '--fix'] : ['doctor']
+  const result = spawnSync(bin, args, {
+    encoding: 'utf8',
+    timeout: timeoutMs,
+    cwd: homedir(),
+    env: getCliEnv(),
+    windowsHide: true,
+  })
+
+  if (result.error) {
+    if (result.error.code === 'ETIMEDOUT') {
+      throw new Error(fix ? 'doctor --fix 执行超时 (30s)' : 'doctor 执行超时 (20s)')
+    }
+    if (result.error.code === 'ENOENT') {
+      throw new Error('OpenClaw CLI 未找到，请先安装')
+    }
+    throw new Error(`执行 doctor 失败: ${result.error.message || result.error}`)
+  }
+
+  return {
+    success: result.status === 0,
+    output: String(result.stdout || '').trim(),
+    errors: String(result.stderr || '').trim(),
+    exitCode: typeof result.status === 'number' ? result.status : null,
+  }
+}
+
 // 配置缓存：避免每次请求同步读磁盘（TTL 2秒，写入时立即失效）
 let _panelConfigCache = null
 let _panelConfigCacheTime = 0
@@ -2595,6 +2626,19 @@ const handlers = {
       return 'Gateway 已重启'
     } else {
       throw new Error('Windows 请使用 Tauri 桌面应用')
+    }
+  },
+
+  async doctor_fix() {
+    return runDoctorCommand({ fix: true, timeoutMs: 30000 })
+  },
+
+  async doctor_check() {
+    const result = runDoctorCommand({ fix: false, timeoutMs: 20000 })
+    return {
+      success: result.success,
+      output: result.output,
+      errors: result.errors,
     }
   },
 

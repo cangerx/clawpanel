@@ -18,6 +18,8 @@ REF="${CLAWPANEL_REF:-main}"
 PORT="${CLAWPANEL_PORT:-1420}"
 HOST="${CLAWPANEL_HOST:-0.0.0.0}"
 DOWNLOAD_TIMEOUT="${CLAWPANEL_DOWNLOAD_TIMEOUT:-600}"
+DOWNLOAD_LOW_SPEED_LIMIT="${CLAWPANEL_DOWNLOAD_LOW_SPEED_LIMIT:-1024}"
+DOWNLOAD_LOW_SPEED_TIME="${CLAWPANEL_DOWNLOAD_LOW_SPEED_TIME:-20}"
 SOURCE_PREFERENCE_RAW="${CLAWPANEL_SOURCE:-auto}"
 SOURCE_PROBE_TIMEOUT="${CLAWPANEL_SOURCE_PROBE_TIMEOUT:-8}"
 INSTALLER_VERSION="v4"
@@ -139,6 +141,21 @@ require_cmd() {
   command -v "$1" >/dev/null 2>&1
 }
 
+is_china_locale() {
+  local tz lang lc_all lc_messages
+  tz="$(cat /etc/timezone 2>/dev/null || true)"
+  lang="${LANG:-}"
+  lc_all="${LC_ALL:-}"
+  lc_messages="${LC_MESSAGES:-}"
+
+  case "$tz $lang $lc_all $lc_messages" in
+    *Asia/Shanghai*|*Asia/Chongqing*|*Asia/Harbin*|*Asia/Urumqi*|*zh_CN*|*zh_SG*)
+      return 0
+      ;;
+  esac
+  return 1
+}
+
 file_size() {
   local path="$1"
   if [ ! -f "$path" ]; then
@@ -193,10 +210,11 @@ download_with_live_progress() {
   if require_cmd curl; then
     curl --fail --location --silent --show-error \
       --connect-timeout 15 --max-time "$DOWNLOAD_TIMEOUT" \
+      --speed-limit "$DOWNLOAD_LOW_SPEED_LIMIT" --speed-time "$DOWNLOAD_LOW_SPEED_TIME" \
       --retry 2 --retry-delay 2 \
       -o "$output" "$url" &
   elif require_cmd wget; then
-    wget --tries=3 --timeout=15 -q -O "$output" "$url" &
+    wget --tries=3 --timeout=15 --read-timeout="$DOWNLOAD_LOW_SPEED_TIME" -q -O "$output" "$url" &
   else
     return 1
   fi
@@ -507,6 +525,14 @@ prompt_source_choice_if_needed() {
 
 finalize_source_preference() {
   prompt_source_choice_if_needed
+
+  # 国内网络在 auto 模式下默认优先 Gitee，可通过 CLAWPANEL_SOURCE 覆盖。
+  if [ "$SOURCE_PREFERENCE" = "auto" ] && is_china_locale; then
+    SOURCE_PREFERENCE='gitee'
+    SOURCE_PRIMARY_LABEL='Gitee'
+    SOURCE_SECONDARY_LABEL='GitHub'
+  fi
+
   if [ "$SOURCE_PREFERENCE" = "auto" ]; then
     auto_pick_fastest_source
   fi
@@ -558,13 +584,14 @@ download_archive() {
   if require_cmd curl; then
     curl --fail --location --silent --show-error \
       --connect-timeout 15 --max-time "$DOWNLOAD_TIMEOUT" \
+      --speed-limit "$DOWNLOAD_LOW_SPEED_LIMIT" --speed-time "$DOWNLOAD_LOW_SPEED_TIME" \
       --retry 2 --retry-delay 2 \
       -o "$output" "$url"
     return
   fi
 
   if require_cmd wget; then
-    wget --tries=3 --timeout=15 -q -O "$output" "$url"
+    wget --tries=3 --timeout=15 --read-timeout="$DOWNLOAD_LOW_SPEED_TIME" -q -O "$output" "$url"
     return
   fi
 
