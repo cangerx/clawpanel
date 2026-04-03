@@ -20,7 +20,9 @@ fn update_stage_dir() -> PathBuf {
 }
 
 fn update_backup_dir() -> PathBuf {
-    super::openclaw_dir().join("clawpanel").join("web-update.bak")
+    super::openclaw_dir()
+        .join("clawpanel")
+        .join("web-update.bak")
 }
 
 fn update_state_path(dir: &Path) -> PathBuf {
@@ -99,9 +101,7 @@ pub fn start_background_frontend_updater() {
             if settings.mode == "background" && settings.frontend_enabled {
                 let _ = run_background_frontend_update(&settings).await;
             }
-            let delay_minutes = settings
-                .interval_minutes
-                .max(MIN_UPDATE_INTERVAL_MINUTES);
+            let delay_minutes = settings.interval_minutes.max(MIN_UPDATE_INTERVAL_MINUTES);
             tokio::time::sleep(std::time::Duration::from_secs(delay_minutes * 60)).await;
         }
     });
@@ -115,8 +115,12 @@ pub async fn check_frontend_update() -> Result<Value, String> {
     let compatible = version_ge(current, &manifest.min_app_version);
     let state = read_applied_update_state();
     let ready = update_dir().join("index.html").exists();
-    let update_ready = ready && state.as_ref().map(|s| s.version.as_str()) == Some(manifest.version.as_str());
-    let has_update = !manifest.version.is_empty() && compatible && version_gt(&manifest.version, current) && !update_ready;
+    let update_ready =
+        ready && state.as_ref().map(|s| s.version.as_str()) == Some(manifest.version.as_str());
+    let has_update = !manifest.version.is_empty()
+        && compatible
+        && version_gt(&manifest.version, current)
+        && !update_ready;
 
     Ok(json!({
         "currentVersion": current,
@@ -163,7 +167,11 @@ pub async fn download_frontend_update(url: String, expected_hash: String) -> Res
     apply_update_archive(
         bytes.as_ref(),
         manifest.as_ref(),
-        if hash.is_empty() { None } else { Some(hash.as_str()) },
+        if hash.is_empty() {
+            None
+        } else {
+            Some(hash.as_str())
+        },
     )
 }
 
@@ -318,7 +326,6 @@ async fn run_background_frontend_update(settings: &UpdateSettings) -> Result<(),
     record_update_check(&check_at, Some(result), None)
 }
 
-
 fn apply_update_archive(
     bytes: &[u8],
     manifest: Option<&UpdateManifest>,
@@ -326,7 +333,10 @@ fn apply_update_archive(
 ) -> Result<Value, String> {
     let hash = sha256_hex(bytes);
     if let Some(expected_hash) = expected_hash {
-        let expected = expected_hash.trim().strip_prefix("sha256:").unwrap_or(expected_hash.trim());
+        let expected = expected_hash
+            .trim()
+            .strip_prefix("sha256:")
+            .unwrap_or(expected_hash.trim());
         if !expected.is_empty() && hash != expected {
             return Err(format!("哈希校验失败: 期望 {}，实际 {}", expected, hash));
         }
@@ -355,7 +365,9 @@ fn apply_update_archive(
     }
 
     let state = AppliedUpdateState {
-        version: manifest.map(|item| item.version.clone()).unwrap_or_default(),
+        version: manifest
+            .map(|item| item.version.clone())
+            .unwrap_or_default(),
         hash: format!("sha256:{hash}"),
         url: manifest.map(|item| item.url.clone()).unwrap_or_default(),
         applied_at: now_iso(),
@@ -482,7 +494,8 @@ fn load_panel_config_value() -> Result<Value, String> {
         return Ok(normalize_panel_config_value(json!({})));
     }
     let content = fs::read_to_string(&path).map_err(|e| format!("读取面板配置失败: {e}"))?;
-    let parsed = serde_json::from_str::<Value>(&content).map_err(|e| format!("解析面板配置失败: {e}"))?;
+    let parsed =
+        serde_json::from_str::<Value>(&content).map_err(|e| format!("解析面板配置失败: {e}"))?;
     Ok(normalize_panel_config_value(parsed))
 }
 
@@ -497,7 +510,11 @@ fn save_panel_config_value(config: &Value) -> Result<(), String> {
     fs::write(&path, content).map_err(|e| format!("写入面板配置失败: {e}"))
 }
 
-fn record_update_check(check_at: &str, result: Option<Value>, error: Option<String>) -> Result<(), String> {
+fn record_update_check(
+    check_at: &str,
+    result: Option<Value>,
+    error: Option<String>,
+) -> Result<(), String> {
     let mut panel = load_panel_config_value()?;
     let root = panel
         .as_object_mut()
@@ -531,7 +548,10 @@ fn read_applied_update_state() -> Option<AppliedUpdateState> {
         }
     }
 
-    let version = fs::read_to_string(update_version_path(&dir)).ok()?.trim().to_string();
+    let version = fs::read_to_string(update_version_path(&dir))
+        .ok()?
+        .trim()
+        .to_string();
     if version.is_empty() {
         None
     } else {
