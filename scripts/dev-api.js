@@ -2428,6 +2428,7 @@ const ALWAYS_LOCAL = new Set([
   'assistant_check_port', 'assistant_web_search', 'assistant_fetch_url',
   'assistant_ensure_data_dir', 'assistant_save_image', 'assistant_load_image', 'assistant_delete_image',
   'assistant_proxy',
+  'doctor_check', 'doctor_fix',
 ])
 
 // === 工具函数 ===
@@ -2634,11 +2635,12 @@ const handlers = {
   },
 
   async doctor_check() {
-    const result = runDoctorCommand({ fix: false, timeoutMs: 20000 })
+    const result = await runDoctorCommand({ fix: false, timeoutMs: 20000 })
     return {
       success: result.success,
       output: result.output,
       errors: result.errors,
+      exitCode: result.exitCode,
     }
   },
 

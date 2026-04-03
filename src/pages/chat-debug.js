@@ -324,12 +324,17 @@ async function handleDoctor(page, fix) {
     }
   } catch (e) {
     const errMsg = e?.message || String(e)
-    pre.textContent = '执行失败: ' + errMsg
+    const isUnimplemented = errMsg.includes('未实现的命令')
+    pre.textContent = isUnimplemented
+      ? `执行失败: ${errMsg}\n\n当前请求走的是 Web/dev API 命令分发链路，但该链路未覆盖 doctor 命令；这表示前端路由层未命中对应 handler，并非 OpenClaw doctor 本身执行失败。`
+      : '执行失败: ' + errMsg
     pre.style.color = 'var(--error)'
-    if (errMsg.includes('ERR_MODULE_NOT_FOUND') || errMsg.includes('Cannot find module') || errMsg.includes('未找到')) {
+    if (isUnimplemented) {
+      appendDoctorTip(section, 'Web API 未覆盖 doctor 命令', '当前运行的是 Web/dev 模式命令链路。请确认 dev-api 已注册 doctor_check / doctor_fix，或切换到支持这些命令的桌面端 / 本机实例。')
+    } else if (errMsg.includes('ERR_MODULE_NOT_FOUND') || errMsg.includes('Cannot find module') || errMsg.includes('未找到')) {
       appendDoctorTip(section, 'OpenClaw CLI 不可用', '请前往 <a href="#" data-nav="about" style="color:var(--primary);text-decoration:underline;font-weight:500">关于页面</a> 安装或重新安装 OpenClaw。')
     }
-    toast('执行失败: ' + e, 'error')
+    toast('执行失败: ' + errMsg, 'error')
   } finally {
     if (btnCheck) { btnCheck.disabled = false; btnCheck.textContent = '诊断配置' }
     if (btnFix) { btnFix.disabled = false; btnFix.textContent = '自动修复' }

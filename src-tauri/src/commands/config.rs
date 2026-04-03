@@ -2642,7 +2642,13 @@ pub async fn doctor_check() -> Result<Value, String> {
                 "errors": stderr.trim(),
             }))
         }
-        Ok(Err(e)) => Err(format!("执行 doctor 失败: {e}")),
+        Ok(Err(e)) => {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                Err("OpenClaw CLI 未找到，请先安装".to_string())
+            } else {
+                Err(format!("执行 doctor 失败: {e}"))
+            }
+        }
         Err(_) => Err("doctor 执行超时 (20s)".to_string()),
     }
 }
