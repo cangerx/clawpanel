@@ -1,9 +1,9 @@
 [package]
 name = "clawpanel"
-version = "1.0.3"
+version = "1.0.4"
 edition = "2021"
 description = "ClawPanel - OpenClaw 可视化管理面板"
-authors = ["qingchencloud"]
+authors = ["canger"]
 repository = "https://github.com/cangerx/clawpanel"
 homepage = "https://github.com/cangerx/clawpanel"
 license = "AGPL-3.0"

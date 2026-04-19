@@ -4746,16 +4746,6 @@ const handlers = {
         const data = await resp.json()
         const versions = Object.keys(data.versions || {})
         versions.sort((a, b) => versionCompare(b, a))
-        const recommended = recommendedVersionFor(source)
-        if (recommended) {
-          const pos = versions.indexOf(recommended)
-          if (pos >= 0) {
-            versions.splice(pos, 1)
-            versions.unshift(recommended)
-          } else {
-            versions.unshift(recommended)
-          }
-        }
         return versions
       } catch (e) {
         lastError = e
@@ -4770,7 +4760,7 @@ const handlers = {
     const currentSource = detectInstalledSource()
     const pkg = npmPackageName(source)
     const recommended = recommendedVersionFor(source)
-    const ver = version || recommended || 'latest'
+    const ver = version || 'latest'
     const oldPkg = npmPackageName(currentSource)
     const needUninstallOld = currentSource !== source
     const npmBin = isWindows ? 'npm.cmd' : 'npm'

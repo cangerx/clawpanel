@@ -61,9 +61,9 @@ async function loadData(page) {
       // 非 Tauri 环境或 API 不可用，使用构建时注入的版本号
     }
 
-    // 异步检查前端热更新
+    // 异步检查前端热更新（初始显示检查中 + 检查更新按钮）
     let panelUpdateHtml = '<span style="color:var(--text-tertiary)">检查更新中...</span>'
-    checkHotUpdate(cards, panelVersion)
+    // checkHotUpdate 会在卡片渲染后调用，这里先占位
 
     const isInstalled = !!version.current
     const sourceLabel = version.source === 'official' ? '官方版' : '汉化版'
@@ -94,7 +94,10 @@ async function loadData(page) {
                  <button class="btn btn-primary btn-sm" id="btn-apply-recommended" style="${btnSm}">切换到推荐版</button>`
               : '<span style="color:var(--success)">已是推荐稳定版</span>')
             : ''}
-          ${version.latest_update_available && version.latest ? `<span style="color:var(--text-tertiary)">最新上游: ${version.latest}</span>` : ''}
+          ${version.latest_update_available && version.latest
+            ? `<span style="color:var(--accent)">最新版: ${version.latest}</span>
+               <button class="btn btn-primary btn-sm" id="btn-upgrade-latest" style="${btnSm}">一键升级</button>`
+            : ''}
           <button class="btn btn-${isInstalled ? 'secondary' : 'primary'} btn-sm" id="btn-version-mgmt" style="${btnSm}">
             ${isInstalled ? '切换版本' : '安装 OpenClaw'}
           </button>
@@ -111,9 +114,18 @@ async function loadData(page) {
       </div>
     `
 
+    // 卡片渲染完成后启动 Cpanel 更新检查
+    checkHotUpdate(cards, panelVersion)
+
     const applyRecommendedBtn = cards.querySelector('#btn-apply-recommended')
     if (applyRecommendedBtn && version.recommended) {
       applyRecommendedBtn.onclick = () => doInstall(page, aheadOfRecommended ? '回退到推荐稳定版' : '切换到推荐稳定版', version.source, version.recommended)
+    }
+
+    // 一键升级到最新版
+    const upgradeLatestBtn = cards.querySelector('#btn-upgrade-latest')
+    if (upgradeLatestBtn && version.latest) {
+      upgradeLatestBtn.onclick = () => doInstall(page, `升级到最新版 ${version.latest}`, version.source, version.latest)
     }
 
     // 版本管理 / 安装
@@ -292,9 +304,15 @@ async function showVersionPicker(page, currentVersion) {
       const stable = allVersions.filter(v => !v.includes('nightly') && !v.includes('canary') && !v.includes('alpha') && !v.includes('beta') && !v.includes('rc') && !v.includes('dev') && !v.includes('next'))
       const versions = showNightly ? allVersions : (stable.length > 0 ? stable : allVersions)
       const nightlyCount = allVersions.length - stable.length
+      const recommendedVer = currentVersion.recommended || null
       select.innerHTML = versions.map((v, idx) => {
         const isCurrent = isInstalled && v === currentVersion.current && source === (currentVersion.source === 'official' ? 'official' : 'chinese')
-        return `<option value="${v}">${v}${idx === 0 ? ' (推荐)' : ''}${isCurrent ? ' (当前)' : ''}</option>`
+        const isRecommended = recommendedVer && (v === recommendedVer || v.split('-')[0] === recommendedVer.split('-')[0])
+        const tags = []
+        if (idx === 0) tags.push('最新')
+        if (isRecommended) tags.push('推荐稳定版')
+        if (isCurrent) tags.push('当前')
+        return `<option value="${v}">${v}${tags.length ? ' (' + tags.join('/') + ')' : ''}</option>`
       }).join('')
       // nightly 切换提示
       const toggleEl = overlay.querySelector('#nightly-toggle')
@@ -397,12 +415,30 @@ async function doInstall(page, title, source, version) {
   }
 }
 
-async function checkHotUpdate(cards, panelVersion) {
+async function checkHotUpdate(cards, panelVersion, _isManual = false) {
   const el = () => cards.querySelector('#panel-update-meta')
+  const btnSm = 'padding:2px 8px;font-size:var(--font-size-xs)'
   const modeLabel = {
     manual: '手动',
     notify: '提醒',
     background: '后台自动',
+  }
+
+  // 显示检查中状态
+  const meta0 = el()
+  if (meta0) {
+    meta0.innerHTML = `<span style="color:var(--text-tertiary)">检查中...</span>`
+  }
+
+  // 绑定检查更新按钮（渲染完后统一调用）
+  function bindCheckBtn() {
+    const btn = el()?.querySelector('#btn-check-update')
+    if (!btn) return
+    btn.addEventListener('click', async () => {
+      btn.disabled = true
+      btn.textContent = '检查中...'
+      await checkHotUpdate(cards, panelVersion, true)
+    })
   }
 
   try {
@@ -431,6 +467,8 @@ async function checkHotUpdate(cards, panelVersion) {
       </div>
       ${lastError}
     `
+    // 公共的「检查更新」按钮
+    const checkBtn = `<button class="btn btn-secondary btn-sm" id="btn-check-update" style="${btnSm}">检查更新</button>`
 
     if (info.updateReady) {
       const ver = status?.updateVersion || info.manifest?.version || info.latestVersion || ''
@@ -438,8 +476,9 @@ async function checkHotUpdate(cards, panelVersion) {
         <div style="display:flex;flex-direction:column;gap:8px;width:100%">
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
             <span style="color:var(--accent)">v${ver} 已就绪</span>
-            <button class="btn btn-primary btn-sm" id="btn-hot-reload" style="padding:2px 8px;font-size:var(--font-size-xs)">重载应用</button>
-            <button class="btn btn-secondary btn-sm" id="btn-hot-rollback" style="padding:2px 8px;font-size:var(--font-size-xs)">回退</button>
+            <button class="btn btn-primary btn-sm" id="btn-hot-reload" style="${btnSm}">立即重载</button>
+            <button class="btn btn-secondary btn-sm" id="btn-hot-rollback" style="${btnSm}">回退</button>
+            ${checkBtn}
           </div>
           ${statusLine}
         </div>
@@ -468,8 +507,9 @@ async function checkHotUpdate(cards, panelVersion) {
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
             <span style="color:var(--accent)">新版本: v${ver}</span>
             ${changelog ? `<span style="color:var(--text-tertiary);font-size:var(--font-size-xs)">${changelog}</span>` : ''}
-            <button class="btn btn-primary btn-sm" id="btn-hot-download" style="padding:2px 8px;font-size:var(--font-size-xs)">热更新</button>
-            <a class="btn btn-secondary btn-sm" href="https://github.com/cangerx/clawpanel/releases" target="_blank" rel="noopener" style="padding:2px 8px;font-size:var(--font-size-xs)">完整安装包</a>
+            <button class="btn btn-primary btn-sm" id="btn-hot-download" style="${btnSm}">一键升级</button>
+            <a class="btn btn-secondary btn-sm" href="https://github.com/cangerx/clawpanel/releases" target="_blank" rel="noopener" style="${btnSm}">完整安装包</a>
+            ${checkBtn}
           </div>
           ${autoHint}
           ${statusLine}
@@ -477,35 +517,50 @@ async function checkHotUpdate(cards, panelVersion) {
       `
       meta.querySelector('#btn-hot-download')?.addEventListener('click', async () => {
         const btn = meta.querySelector('#btn-hot-download')
-        if (btn) { btn.disabled = true; btn.textContent = '下载中...' }
+        if (btn) { btn.disabled = true; btn.textContent = '升级中...' }
         try {
           await api.downloadFrontendUpdate(manifest.url, manifest.hash || '')
-          toast('更新下载完成，点击「重载应用」生效', 'success')
+          toast('升级下载完成，点击「立即重载」生效', 'success')
           checkHotUpdate(cards, panelVersion)
         } catch (e) {
-          toast('下载失败: ' + (e.message || e), 'error')
+          toast('升级失败: ' + (e.message || e), 'error')
           if (btn) { btn.disabled = false; btn.textContent = '重试' }
         }
       })
     } else if (!info.compatible) {
       meta.innerHTML = `
         <div style="display:flex;flex-direction:column;gap:8px;width:100%">
-          <div><span style="color:var(--text-tertiary)">需要更新完整安装包</span> <a class="btn btn-primary btn-sm" href="https://api.772.ee/" target="_blank" rel="noopener" style="padding:2px 8px;font-size:var(--font-size-xs)">前往官网下载</a></div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span style="color:var(--text-tertiary)">需要更新完整安装包</span>
+            <a class="btn btn-primary btn-sm" href="https://github.com/cangerx/clawpanel/releases" target="_blank" rel="noopener" style="${btnSm}">前往下载</a>
+            ${checkBtn}
+          </div>
           ${statusLine}
         </div>
       `
     } else {
       meta.innerHTML = `
         <div style="display:flex;flex-direction:column;gap:8px;width:100%">
-          <div><span style="color:var(--success)">已是最新</span></div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <span style="color:var(--success)">已是最新版本</span>
+            ${checkBtn}
+          </div>
           ${statusLine}
         </div>
       `
     }
+    bindCheckBtn()
   } catch (err) {
     const meta = el()
     if (!meta) return
-    meta.innerHTML = `<span style="color:var(--text-tertiary)">暂无法检查更新</span> <a class="btn btn-secondary btn-sm" href="https://api.772.ee/" target="_blank" rel="noopener" style="padding:2px 8px;font-size:var(--font-size-xs)">前往官网下载</a>`
+    meta.innerHTML = `
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span style="color:var(--text-tertiary)">暂无法检查更新</span>
+        <button class="btn btn-secondary btn-sm" id="btn-check-update" style="${btnSm}">重新检查</button>
+        <a class="btn btn-secondary btn-sm" href="https://github.com/cangerx/clawpanel/releases" target="_blank" rel="noopener" style="${btnSm}">前往下载</a>
+      </div>
+    `
+    bindCheckBtn()
   }
 }
 

@@ -1,9 +1,9 @@
 {
-  "version": "1.0.3",
+  "version": "1.0.4",
   "minAppVersion": "1.0.3",
-  "hash": "sha256:070e636635128ddd382a9ad25ab50982d904a1c0ebd30977f6dde7d534292800",
-  "url": "https://github.com/cangerx/clawpanel/releases/download/v1.0.3/web-1.0.3.zip",
-  "size": 2017457,
-  "changelog": "",
-  "releasedAt": "2026-04-03T11:36:22Z"
+  "hash": "",
+  "url": "https://github.com/cangerx/clawpanel/releases/download/v1.0.4/web-1.0.4.zip",
+  "size": 0,
+  "changelog": "feat: 关于页新增检查更新/一键升级按钮；更新 OpenClaw 推荐版本至最新",
+  "releasedAt": "2026-04-19T18:20:00Z"
 }

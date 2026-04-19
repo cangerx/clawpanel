@@ -1,10 +1,10 @@
 {
   "name": "clawpanel",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "private": true,
   "description": "ClawPanel - OpenClaw 可视化管理面板，基于 Tauri v2 的跨平台桌面应用",
   "type": "module",
-  "author": "qingchencloud",
+  "author": "canger",
   "license": "AGPL-3.0",
   "homepage": "https://github.com/cangerx/clawpanel",
   "repository": {
