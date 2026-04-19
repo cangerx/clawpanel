@@ -341,8 +341,8 @@ systemctl restart clawpanel    # 或 systemctl --user restart clawpanel
 **方式二：命令行手动升级**
 
 ```bash
-sudo npm install -g @qingchencloud/openclaw-zh@2026.3.7-zh.2 --registry https://registry.npmmirror.com
-sudo npm install -g openclaw@2026.3.11 --registry https://registry.npmjs.org
+sudo npm install -g @qingchencloud/openclaw-zh@2026.4.14-zh.1 --registry https://registry.npmmirror.com
+sudo npm install -g openclaw@2026.4.15 --registry https://registry.npmjs.org
 ```
 
 ---

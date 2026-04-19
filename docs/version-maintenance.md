@@ -25,13 +25,13 @@ Cpanl 现在使用仓库根目录的 `openclaw-version-policy.json` 作为统一
 ```json
 {
   "default": {
-    "official": { "recommended": "2026.3.11" },
-    "chinese": { "recommended": "2026.3.7-zh.2" }
+    "official": { "recommended": "2026.4.15" },
+    "chinese": { "recommended": "2026.4.14-zh.1" }
   },
   "panels": {
     "0.9.0": {
-      "official": { "recommended": "2026.3.11" },
-      "chinese": { "recommended": "2026.3.7-zh.2" }
+      "official": { "recommended": "2026.4.15" },
+      "chinese": { "recommended": "2026.4.14-zh.1" }
     }
   }
 }
